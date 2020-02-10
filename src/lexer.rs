@@ -221,7 +221,10 @@ impl HoaLexer {
         if self.line >= self.lines.len() {
             self.is_eof = true;
         }
-        if self.is_eof { return; }
+        if self.is_eof {
+            self.curr = '\x1b';
+            return;
+        }
         self.curr = match self.lines[self.line].chars().nth(self.col) {
             Some(c) => c,
             None => {
@@ -236,6 +239,28 @@ impl HoaLexer {
         }
     }
 
+    fn peek_char_line(&self) -> Option<char> {
+        self.lines[self.line].chars().nth(self.col)
+    }
+
+    fn peek_word(&mut self) -> Option<String> {
+        let mut word = String::new();
+        let col = self.col;
+        let line = self.line;
+        let curr = self.curr;
+        loop {
+            if !self.curr.is_alphabetic() {
+                break;
+            }
+            word.push(self.curr);
+            self.next_char();
+        }
+        self.col = col;
+        self.line = line;
+        self.curr = curr;
+        Some(word)
+    }
+
     fn skip_whitespace(&mut self) {
         loop {
             if self.curr.is_whitespace() {
@@ -246,24 +271,97 @@ impl HoaLexer {
         }
     }
 
-    pub fn next_token(&mut self) -> Token {
+    pub fn next_token(&mut self) -> Result<Token, &'static str> {
         self.skip_whitespace();
         match self.curr {
-            c if c.is_alphabetic() => Token::new_with_string(TokenType::TokenString, self.line, self.col, self.curr.to_string()),
-            f => Token::new(TokenType::TokenIdent, self.line, self.col),
+            '!' => Ok(Token::new(TokenType::TokenNot, self.line, self.col)),
+            '&' => Ok(Token::new(TokenType::TokenAnd, self.line, self.col)),
+            '|' => Ok(Token::new(TokenType::TokenOr, self.line, self.col)),
+            '(' => Ok(Token::new(TokenType::TokenLparenth, self.line, self.col)),
+            ')' => Ok(Token::new(TokenType::TokenRparenth, self.line, self.col)),
+            '[' => Ok(Token::new(TokenType::TokenLbracket, self.line, self.col)),
+            ']' => Ok(Token::new(TokenType::TokenRbracket, self.line, self.col)),
+            '{' => Ok(Token::new(TokenType::TokenLcurly, self.line, self.col)),
+            '}' => Ok(Token::new(TokenType::TokenRcurly, self.line, self.col)),
+            '-' => {
+                self.next_char();
+                if self.curr == '-' {
+                    match &self.peek_word().unwrap() as &str {
+                        "ABORT" => Ok(Token::new(TokenType::TokenAbort, self.line, self.col)),
+                        "BODY" => Ok(Token::new(TokenType::TokenBody, self.line, self.col)),
+                        "END" => Ok(Token::new(TokenType::TokenEnd, self.line, self.col)),
+                        _ => Err("lexical error: token started with - but did not match any of ABORT, ERROR or END"),
+                    }
+                } else {
+                    Err("lexical error: token started with -, expected a second -")
+                }
+            }
+            '"' => {
+                let mut txt = String::new();
+                loop {
+                    if self.curr == '"' {
+                        break;
+                    }
+                    if self.is_eof {
+                        return Err("premature end of file in quoted string");
+                    }
+                    if self.curr != '\\' {
+                        txt.push(self.curr);
+                    }
+                    self.next_char();
+                }
+                Ok(Token::new_with_string(
+                    TokenType::TokenString,
+                    self.line,
+                    self.col,
+                    txt,
+                ))
+            },
+            _n if _n.is_numeric() => {
+                let mut txt = String::new();
+                loop {
+                    if !self.curr.is_numeric() || self.col == 0 {
+                        break;
+                    }
+                    if self.is_eof {
+                        return Err("premature end of file in integer");
+                    }
+                    txt.push(self.curr);
+                    self.next_char();
+                }
+                let i = match txt.parse::<usize>() {
+                    Ok(i) => i,
+                    Err(_) => {
+                        return Err("could not parse integer");
+                    },
+                };
+                Ok(Token::new_with_int(TokenType::TokenInt, self.line, self.col, i))
+            },
+            _ => Ok(Token::new(TokenType::TokenIdent, self.line, self.col)),
         }
     }
 
     // !TODO: remove
-    fn it_works(&mut self) -> &String {
-        loop {
-            println!("{:?}", self.next_token());
-            self.next_char();
-            if self.is_eof {
-                break;
-            }
-        }
+    fn it_works(&self) -> &String {
         &self.input
+    }
+
+    fn one_indexed<T>((n, x): (usize, T)) -> (usize, T) {
+        (n+1, x)
+    }
+
+    fn iterator_annotated(&self) -> impl Iterator<Item = (char, usize, usize)> + '_ {
+        self.input.lines().enumerate().flat_map(|(n_line, line)| {
+            line.chars().enumerate().map(move |(n_col, chr)| {
+                (chr, n_line, n_col)
+            })
+        })
+    }
+
+    pub fn iterator_from(&self, l: usize, col: usize) -> impl Iterator<Item = (char, usize, usize)> + '_ {
+        self.iterator_annotated().filter(move |(c, n_line, n_col)| {
+            *n_line > l || (*n_line >= l && *n_col >= col)
+        })
     }
 }
 
@@ -274,6 +372,14 @@ mod tests {
     fn lexer_has_ownership() {
         let filename = "/home/leon/tdoc".to_string();
         let mut hl = HoaLexer::from_file(filename);
-        hl.it_works();
+        for (c, i, ii) in hl.iterator_from(0,0) {
+            print!("({:?}{:?}{:?})", c, i, ii);
+        }
+        println!("\n{:?}", hl.it_works());
+        let it = hl.iterator_from(0,3);
+        for (c, i, ii) in it {
+            print!("({:?}{:?}{:?})", c, i, ii);
+        }
+        print!("\n");
     }
 }
