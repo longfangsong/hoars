@@ -50,8 +50,8 @@ mod tests {
         assert_eq!(peek_n(&mut it, 4).unwrap(), vec!['a', 'b', 'c', 'd']);
         assert_eq!(it.next().unwrap().0, 'a');
 
-        let second_it = multipeek(txt.chars().map(|c| (c, c, c)));
-        assert!(peek_n(&mut it, txt.len() + 1).is_none());
+        let mut second_it = multipeek(txt.chars().map(|c| (c, c, c)));
+        assert!(peek_n(&mut second_it, txt.len() + 1).is_none());
     }
 
     #[test]

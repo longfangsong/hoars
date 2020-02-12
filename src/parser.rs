@@ -1,5 +1,24 @@
-//use nom::IResult;
+use super::HoaLexer;
+use super::HoaConsumer;
 
-use nom::error::ErrorKind;
+pub struct HoaParser<C: HoaConsumer> {
+    consumer: C,
+}
 
-pub type IResult<I, O, E=(I, ErrorKind)> = Result<(I, O), Err<E>>;
+impl<C: HoaConsumer> HoaParser<C> {
+    fn new(consumer: C) -> HoaParser<C> {
+        HoaParser {
+            consumer,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn trait_test() {
+
+    }
+}

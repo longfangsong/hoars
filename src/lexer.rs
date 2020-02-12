@@ -8,7 +8,7 @@ use std::fs::File;
 use std::io::Read;
 use std::iter::{FromIterator, Peekable, once};
 use std::string::String;
-use core::mem;
+use std::str::{from_utf8};
 
 use itertools::Itertools;
 use self::itertools::{MultiPeek, multipeek};
@@ -193,28 +193,47 @@ impl ToString for Token {
 
 
 impl HoaLexer {
+    fn build_known_headers() -> HashMap<String, TokenType> {
+        HashMap::from_iter(vec![
+            ("HOA:".to_string(), TokenType::TokenHoa),
+            ("State:".to_string(), TokenType::TokenState),
+            ("States:".to_string(), TokenType::TokenStates),
+            ("Start:".to_string(), TokenType::TokenStart),
+            ("AP:".to_string(), TokenType::TokenAp),
+            ("Alias:".to_string(), TokenType::TokenAlias),
+            ("Acceptance".to_string(), TokenType::TokenAcceptance),
+            ("acc-name:".to_string(), TokenType::TokenAccname),
+            ("tool:".to_string(), TokenType::TokenTool),
+            ("name:".to_string(), TokenType::TokenName),
+            ("properties:".to_string(), TokenType::TokenProperties),
+        ])
+    }
+
+    fn from_bytes(input: &[u8]) -> Result<HoaLexer, &'static str> {
+        let contents = match from_utf8(input) {
+            Ok(str) => str,
+            Err(_) => return Err("could not parse input string"),
+        };
+
+        Ok(HoaLexer {
+            line: 0,
+            col: 0,
+            curr: '\t',
+            is_eof: false,
+            lines: String::from(contents)
+                .lines()
+                .map(|s| s.to_string())
+                .collect::<Vec<String>>(),
+            input: String::from(contents),
+            known_headers: HoaLexer::build_known_headers(),
+        })
+    }
+
     fn from_file(filename: String) -> HoaLexer {
         if let Some(mut file) = File::open(filename).ok() {
             let mut contents = String::new();
-            println!("{:?}", contents);
             if file.read_to_string(&mut contents).is_ok() {
-                println!("{:?}", contents);
-                let txt = contents.clone();
-                println!("{:?}", contents);
-                let headers = HashMap::from_iter(vec![
-                    ("HOA:".to_string(), TokenType::TokenHoa),
-                    ("State:".to_string(), TokenType::TokenState),
-                    ("States:".to_string(), TokenType::TokenStates),
-                    ("Start:".to_string(), TokenType::TokenStart),
-                    ("AP:".to_string(), TokenType::TokenAp),
-                    ("Alias:".to_string(), TokenType::TokenAlias),
-                    ("Acceptance".to_string(), TokenType::TokenAcceptance),
-                    ("acc-name:".to_string(), TokenType::TokenAccname),
-                    ("tool:".to_string(), TokenType::TokenTool),
-                    ("name:".to_string(), TokenType::TokenName),
-                    ("properties:".to_string(), TokenType::TokenProperties),
-                ]);
-                let mut hl = HoaLexer {
+                HoaLexer {
                     line: 0,
                     col: 0,
                     curr: '\t',
@@ -224,9 +243,8 @@ impl HoaLexer {
                         .map(|s| s.to_string())
                         .collect::<Vec<String>>(),
                     input: contents,
-                    known_headers: headers,
-                };
-                hl
+                    known_headers: HoaLexer::build_known_headers(),
+                }
             } else {
                 panic!("aasdf");
             }
@@ -255,10 +273,6 @@ impl HoaLexer {
             self.col = 0;
             self.line += 1;
         }
-    }
-
-    fn peek_char_line(&self) -> Option<char> {
-        self.lines[self.line].chars().nth(self.col)
     }
 
     fn peek_word(&mut self) -> Option<String> {
@@ -444,7 +458,7 @@ impl HoaLexer {
                                 Ok(num) => {
                                     tokens.push(Token::new_with_int(TokenType::TokenInt, line, col, num));
                                 }
-                                Err(e) => {
+                                Err(_) => {
                                     return Err("error while parsing integer");
                                 }
                             }
@@ -479,10 +493,10 @@ impl HoaLexer {
                                     Some((c, _, _))
                                     if (c.is_ascii_alphanumeric() || *c == b'_' || *c == b'-') => {
                                         buffer.push(char::from(*c));
-                                    },
+                                    }
                                     Some((b':', _, _)) => {
                                         buffer.push(':');
-                                    },
+                                    }
                                     _ => break 'extract_ident,
                                 }
                             }
@@ -493,7 +507,7 @@ impl HoaLexer {
                                 match self.known_headers.get(buffer.as_str()) {
                                     Some(tokentype) => {
                                         tokens.push(Token::new(*tokentype, line, col));
-                                    },
+                                    }
                                     None => {
                                         tokens.push(Token::new_with_string(TokenType::TokenHeaderName, line, col, buffer));
                                     }
@@ -588,16 +602,6 @@ impl HoaLexer {
         }
     }
 
-    // !TODO: remove
-    fn it_works(&self) -> &String {
-        &self.input
-    }
-
-    fn one_indexed<T>((n, x): (usize, T)) -> (usize, T) {
-        (n + 1, x)
-    }
-
-    // TODO: newlines werden verschluckt! irgendwie müssen die erhalten bleiben
     fn iterator_annotated(&self) -> impl Iterator<Item=(u8, usize, usize)> + '_ {
         self.input.lines().enumerate().flat_map(|(n_line, line)| {
             line.bytes().chain(once(b'\n')).enumerate().map(move |(n_col, chr)| {
@@ -607,7 +611,7 @@ impl HoaLexer {
     }
 
     pub fn iterator_from(&self, l: usize, col: usize) -> impl Iterator<Item=(u8, usize, usize)> + '_ {
-        self.iterator_annotated().filter(move |(c, n_line, n_col)| {
+        self.iterator_annotated().filter(move |(_, n_line, n_col)| {
             *n_line > l || (*n_line >= l && *n_col >= col)
         })
     }
@@ -618,11 +622,23 @@ mod tests {
     use super::*;
 
     #[test]
+    fn basic_token_test() {
+        let testbytes = b"[\n(]";
+        let mut hl = HoaLexer::from_bytes(testbytes).ok().unwrap();
+        let tokens = hl.tokenize().ok().unwrap();
+        assert_eq!(tokens.len(), 4);
+        assert_eq!(tokens[0], Token::new(TokenType::TokenLbracket, 0, 0));
+        assert_eq!(tokens[1], Token::new(TokenType::TokenLparenth, 1, 0));
+        assert_eq!(tokens[2], Token::new(TokenType::TokenRbracket, 1, 1));
+        assert_eq!(tokens[3], Token::new(TokenType::TokenEof, 1, 2));
+    }
+
+    #[test]
     fn new_lexer_test() {
         let filename = "/home/leon/tdoc".to_string();
         let mut hl = HoaLexer::from_file(filename);
         let tokens = hl.tokenize();
-        let mut it = hl.iterator_from(0,0);
+        let it = hl.iterator_from(0, 0);
         for (c, _, _) in it {
             println!("{:?}", c as char);
         }
@@ -632,7 +648,7 @@ mod tests {
     #[test]
     fn newlinetest() {
         let text = "asd\ndfkjdfj".to_string();
-        let mut it = text.bytes();
+        let it = text.bytes();
         for b in it {
             println!("{:?}", char::from(b));
         }
