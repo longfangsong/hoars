@@ -1,4 +1,5 @@
 pub trait HoaConsumer {
+    fn notify_header_start(&mut self, version: &str);
     fn set_name(&mut self, name: &String);
     fn set_aps(&mut self, aps: &Vec<String>);
     // parameter is int_list which is typedefed to std::vector<unsigned int>

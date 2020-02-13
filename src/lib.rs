@@ -2,11 +2,11 @@ pub mod utils;
 
 pub use utils::*;
 
+pub mod consumer;
 mod lexer;
 pub mod parser;
-pub mod consumer;
 
-use lexer::{TokenType, Token, HoaLexer};
+use lexer::{HoaLexer, Token, TokenType};
 
 use std::string::String;
 
