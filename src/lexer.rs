@@ -4,6 +4,7 @@ use super::utils::*;
 
 use std::collections::HashMap;
 use std::env;
+use std::fs;
 use std::fs::File;
 use std::io::Read;
 use std::iter::{once, FromIterator, Peekable};
@@ -107,6 +108,7 @@ pub struct Token<'a> {
     pub col: usize,
 }
 
+#[derive(Clone, Debug)]
 pub struct HoaLexer {
     line: usize,
     col: usize,
@@ -612,8 +614,31 @@ impl HoaLexer {
                                 }
                             }
                         }
-                        _ => {
-                            unimplemented!("any other tokens? error handling?");
+
+                        // handle block comments
+                        b'/' => {
+                            let mut count = 0usize;
+                            'block_comments: loop {
+                                let wrd = peek_n(&mut it, 2);
+                                match wrd {
+                                    None => return Err("unexpected comment ending"),
+                                    Some(chrs) => {
+                                        if chrs != vec![b'*', b'/'] {
+                                            it.reset_peek();
+                                            it.next();
+                                        } else {
+                                            it.reset_peek();
+                                            advance_by(&mut it, 2);
+                                            break 'block_comments;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        d => {
+                            println!("got: {:#?}", d as char);
+                            it.next();
                         }
                     }
                 }
@@ -623,12 +648,12 @@ impl HoaLexer {
     }
 
     fn line_col_to_pos(&self, line: usize, col: usize) -> usize {
-        let mut res = 0usize;
-        for l in 0..line {
-            res += self.lines[l].len();
-        }
-
-        res + col
+        self.lines[0..line]
+            .iter()
+            // we need to add 1 since the \n is not present in lines, but in the byte array it is
+            .map(|l| l.len() + 1)
+            .sum::<usize>()
+            + col
     }
 
     fn iterator_annotated(&self) -> impl Iterator<Item = (u8, usize, usize)> + '_ {
@@ -696,6 +721,16 @@ mod tests {
         let mut hl = HoaLexer::from_file(filename);
         let tokens = hl.tokenize();
         println!("{:#?}", tokens);
+    }
+
+    #[test]
+    fn real_automaton_test() {
+        let filename = "/home/leon/aut1.hoa".to_string();
+        let contents = fs::read(filename).expect("file not found?");
+        let mut hl = HoaLexer::try_from(contents.as_slice()).expect("shit");
+        for token in hl.tokenize().expect("again shit") {
+            println!("{:#?}", token);
+        }
     }
 
     #[test]
