@@ -1,20 +1,40 @@
-use std::fmt::{Error, Formatter};
+use crate::lexer::Token;
+use std::convert::TryFrom;
+use std::fmt::{Debug, Error, Formatter};
 use BooleanAtom::*;
 use BooleanExpression::*;
 
+type StartStates = Vec<usize>;
+
 #[derive(Debug)]
-enum BooleanAtom<'a> {
-    BoolValue(bool),
+pub enum BooleanAtom<'a> {
+    BooleanValue(bool),
     IntegerValue(usize),
     AliasName(&'a str),
 }
 
 #[derive(Debug)]
-enum BooleanExpression<'a> {
+pub enum BooleanExpression<'a> {
     Atom(BooleanAtom<'a>),
     Negation(Box<BooleanExpression<'a>>),
     Conjunction(Box<BooleanExpression<'a>>, Box<BooleanExpression<'a>>),
     Disjunction(Box<BooleanExpression<'a>>, Box<BooleanExpression<'a>>),
+}
+
+#[derive(Debug)]
+pub enum AcceptanceIdent {
+    Fin(usize),
+    FinNeg(usize),
+    Inf(usize),
+    InfNeg(usize),
+}
+
+#[derive(Debug)]
+pub enum AcceptanceCondition {
+    Atom(AcceptanceIdent),
+    Conjunction(Box<AcceptanceCondition>, Box<AcceptanceCondition>),
+    Disjunction(Box<AcceptanceCondition>, Box<AcceptanceCondition>),
+    BooleanValue(bool),
 }
 
 impl<'a> From<BooleanAtom<'a>> for BooleanExpression<'a> {
@@ -24,41 +44,70 @@ impl<'a> From<BooleanAtom<'a>> for BooleanExpression<'a> {
 }
 
 impl<'a> BooleanAtom<'a> {
-    fn btrue() -> BooleanAtom<'a> {
-        BoolValue(true)
+    pub fn btrue() -> BooleanAtom<'a> {
+        BooleanValue(true)
     }
 
-    fn bfalse() -> BooleanAtom<'a> {
-        BoolValue(false)
+    pub fn bfalse() -> BooleanAtom<'a> {
+        BooleanValue(false)
     }
 
-    fn bint(int: usize) -> BooleanAtom<'a> {
+    pub fn bint(int: usize) -> BooleanAtom<'a> {
         IntegerValue(int)
     }
 
-    fn balias(name: &'a str) -> BooleanAtom<'a> {
+    pub fn balias(name: &'a str) -> BooleanAtom<'a> {
         AliasName(name)
     }
 }
 
 impl<'a> BooleanExpression<'a> {
-    fn and(self, other: BooleanExpression<'a>) -> BooleanExpression<'a> {
+    pub fn and(self, other: BooleanExpression<'a>) -> BooleanExpression<'a> {
         Conjunction(Box::new(self), Box::new(other))
     }
 
-    fn or(self, other: BooleanExpression<'a>) -> BooleanExpression<'a> {
+    pub fn or(self, other: BooleanExpression<'a>) -> BooleanExpression<'a> {
         Disjunction(Box::new(self), Box::new(other))
     }
 
-    fn not(self) -> BooleanExpression<'a> {
+    pub fn not(self) -> BooleanExpression<'a> {
         Negation(Box::new(self))
+    }
+}
+
+impl std::fmt::Display for AcceptanceIdent {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            AcceptanceIdent::Fin(int) => write!(f, "Fin({})", int),
+            AcceptanceIdent::FinNeg(int) => write!(f, "Fin(!{})", int),
+            AcceptanceIdent::Inf(int) => write!(f, "Inf({})", int),
+            AcceptanceIdent::InfNeg(int) => write!(f, "Inf(!{})", int),
+        }
+    }
+}
+
+impl std::fmt::Display for AcceptanceCondition {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            AcceptanceCondition::Atom(atom) => write!(f, "{}", atom),
+            AcceptanceCondition::Conjunction(left, right) => write!(f, "({} & {})", left, right),
+            AcceptanceCondition::Disjunction(left, right) => write!(f, "({} | {})", left, right),
+            AcceptanceCondition::BooleanValue(b) => write!(
+                f,
+                "{}",
+                match b {
+                    true => "t",
+                    false => "f",
+                }
+            ),
+        }
     }
 }
 
 impl<'a> std::fmt::Display for BooleanAtom<'a> {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            BoolValue(b) => match b {
+            BooleanValue(b) => match b {
                 true => write!(f, "t"),
                 false => write!(f, "f"),
             },
@@ -104,8 +153,8 @@ mod tests {
     #[test]
     fn expression_construction_test() {
         let be = Conjunction(
-            Box::new(Atom(BoolValue(true))),
-            Box::new(Atom(BoolValue(false))),
+            Box::new(Atom(BooleanValue(true))),
+            Box::new(Atom(BooleanValue(false))),
         );
         println!("{}", be);
     }

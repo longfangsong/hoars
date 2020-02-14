@@ -1,10 +1,10 @@
 pub trait HoaConsumer {
     fn notify_header_start(&mut self, version: &str);
     fn set_name(&mut self, name: &String);
-    fn set_aps(&mut self, aps: &Vec<String>);
+    fn set_aps(&mut self, aps: Vec<String>);
     fn set_number_of_states(&mut self, number: usize);
     // parameter is int_list which is typedefed to std::vector<unsigned int>
-    fn add_start_states(&mut self, st_conj: &Vec<usize>);
+    fn add_start_states(&mut self, st_conj: Vec<usize>);
     // has second argument std::vector<IntOrString>
     fn provide_acceptance_name(&mut self, name: &String);
     fn notify_body_start(&mut self);

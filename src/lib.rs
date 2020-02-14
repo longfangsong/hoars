@@ -7,6 +7,7 @@ mod expressions;
 mod lexer;
 pub mod parser;
 
+use expressions::*;
 use lexer::{HoaLexer, Token, TokenType};
 
 use std::string::String;
