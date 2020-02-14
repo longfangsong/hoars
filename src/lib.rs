@@ -3,17 +3,15 @@ pub mod utils;
 pub use utils::*;
 
 pub mod consumer;
-mod expressions;
 mod lexer;
-pub mod parser;
+//pub mod parser;
+//pub use parser::HoaParser;
 
-use expressions::*;
-use lexer::{HoaLexer, Token, TokenType};
+use lexer::{HoaLexer, Token};
 
 use std::string::String;
 
 pub use consumer::HoaConsumer;
-pub use parser::HoaParser;
 
 #[cfg(test)]
 mod tests {

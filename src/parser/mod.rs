@@ -1,5 +1,7 @@
+mod expression;
+pub use expression::*;
+
 use crate::consumer::HoaConsumer;
-use crate::expressions::*;
 use crate::lexer::TokenType::*;
 use crate::lexer::{HoaLexer, Token, TokenType};
 
@@ -99,27 +101,36 @@ fn label_expr_for_alias<'a>(
     tokens: &Vec<Token<'a>>,
     pos: usize,
 ) -> Result<(BooleanExpression<'a>, usize), ParserError> {
-    let c = tokens.get(pos)?;
-    match c.kind {
-        TokenInt => BooleanAtom::bint(c.int.unwrap()).into(),
-        TokenTrue => BooleanAtom::btrue().into(),
-        TokenFalse => BooleanAtom::bfalse().into(),
-        TokenAliasName => BooleanAtom::balias(c.string.unwrap()).into(),
-        TokenLparenth => label_expr_for_alias(tokens, pos + 1).and_then(|(node, next_pos)| {
-            if let Some(c2) = tokens.get(next_pos) {
-                if c2.kind == TokenRparenth {
-                    Ok((node, next_pos + 1))
+    if let Some(c) = tokens.get(pos) {
+        match c.kind {
+            TokenInt => BooleanAtom::bint(c.int.unwrap()).into(),
+            TokenTrue => BooleanAtom::btrue().into(),
+            TokenFalse => BooleanAtom::bfalse().into(),
+            TokenAliasName => BooleanAtom::balias(c.string.unwrap()).into(),
+            TokenLparenth => label_expr_for_alias(tokens, pos + 1).and_then(|(node, next_pos)| {
+                if let Some(c2) = tokens.get(next_pos) {
+                    if c2.kind == TokenRparenth {
+                        Ok((node, next_pos + 1))
+                    } else {
+                        Err(MissingToken {
+                            expected: TokenRparenth,
+                        })
+                    }
                 } else {
                     Err(MissingToken {
                         expected: TokenRparenth,
                     })
                 }
-            } else {
-                Err(MissingToken {
-                    expected: TokenRparenth,
-                })
-            }
-        }),
+            }),
+        }
+    } else {
+        // fixme error reporing
+        Err(ExpressionParsingError {
+            expected: 0,
+            found: 0,
+            line: 0,
+            col: 0,
+        })
     }
 }
 
