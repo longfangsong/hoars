@@ -3,6 +3,7 @@ pub mod utils;
 pub use utils::*;
 
 pub mod consumer;
+mod expressions;
 mod lexer;
 pub mod parser;
 

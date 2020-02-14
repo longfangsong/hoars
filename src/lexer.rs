@@ -3,13 +3,13 @@ extern crate itertools;
 use super::utils::*;
 
 use std::collections::HashMap;
-use std::env;
 use std::fs;
 use std::fs::File;
 use std::io::Read;
 use std::iter::{once, FromIterator, Peekable};
 use std::str::{from_utf8, Utf8Error};
 use std::string::String;
+use std::{env, fmt};
 
 use self::itertools::{multipeek, MultiPeek};
 use itertools::Itertools;
@@ -17,6 +17,29 @@ use std::convert::TryFrom;
 use std::error::Error;
 use std::fmt::Formatter;
 use std::num::ParseIntError;
+
+use crate::lexer::LexerError::*;
+use crate::lexer::TokenType::*;
+
+#[derive(Debug)]
+pub enum LexerError {
+    ParseInputError {},
+    IntParseError {
+        line: usize,
+        col: usize,
+    },
+    MissingSymbol {
+        expected: u8,
+    },
+    UnrecognizedToken {
+        expected: Option<TokenType>,
+        last: u8,
+    },
+    PrematureEnd {
+        line: usize,
+        col: usize,
+    },
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TokenType {
@@ -117,6 +140,29 @@ pub struct HoaLexer {
     input: String,
     lines: Vec<String>,
     is_eof: bool,
+}
+
+impl fmt::Display for LexerError {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match *self {
+            ParseInputError {} => write!(f, "could not parse input data"),
+            IntParseError { line, col } => write!(
+                f,
+                "could not parse integer in line {}, column {}",
+                line, col
+            ),
+            MissingSymbol { expected } => {
+                write!(f, "unexpected/missing symbol, expected {}", expected)
+            }
+            UnrecognizedToken { expected, last } => match expected {
+                Some(token) => write!(f, "expected token {:?}, last symbol was {}", token, last),
+                None => write!(f, "last symbol was {}", last),
+            },
+            PrematureEnd { line, col } => {
+                write!(f, "premature end in line {}, column {}", line, col)
+            }
+        }
+    }
 }
 
 impl<'a> Token<'a> {
@@ -239,17 +285,17 @@ impl<'a> ToString for Token<'a> {
 impl HoaLexer {
     fn build_known_headers() -> HashMap<String, TokenType> {
         HashMap::from_iter(vec![
-            ("HOA:".to_string(), TokenType::TokenHoa),
-            ("State:".to_string(), TokenType::TokenState),
-            ("States:".to_string(), TokenType::TokenStates),
-            ("Start:".to_string(), TokenType::TokenStart),
-            ("AP:".to_string(), TokenType::TokenAp),
-            ("Alias:".to_string(), TokenType::TokenAlias),
-            ("Acceptance".to_string(), TokenType::TokenAcceptance),
-            ("acc-name:".to_string(), TokenType::TokenAccname),
-            ("tool:".to_string(), TokenType::TokenTool),
-            ("name:".to_string(), TokenType::TokenName),
-            ("properties:".to_string(), TokenType::TokenProperties),
+            ("HOA:".to_string(), TokenHoa),
+            ("State:".to_string(), TokenState),
+            ("States:".to_string(), TokenStates),
+            ("Start:".to_string(), TokenStart),
+            ("AP:".to_string(), TokenAp),
+            ("Alias:".to_string(), TokenAlias),
+            ("Acceptance".to_string(), TokenAcceptance),
+            ("acc-name:".to_string(), TokenAccname),
+            ("tool:".to_string(), TokenTool),
+            ("name:".to_string(), TokenName),
+            ("properties:".to_string(), TokenProperties),
         ])
     }
 
@@ -327,7 +373,7 @@ impl HoaLexer {
         }
     }
 
-    pub fn tokenize(&mut self) -> Result<Vec<Token>, &'static str> {
+    pub fn tokenize(&mut self) -> Result<Vec<Token>, LexerError> {
         let mut tokens = Vec::new();
         // create an iterator that is able to peek multiple times so we can determine tokens
         let mut it = itertools::multipeek(self.iterator_from(0, 0));
@@ -340,7 +386,7 @@ impl HoaLexer {
                 None => {
                     // add an EOF token and calculate position based on lines and length of last line
                     tokens.push(Token::new(
-                        TokenType::TokenEof,
+                        TokenEof,
                         self.lines.len() - 1,
                         self.lines.last().unwrap().len(),
                     ));
@@ -359,39 +405,39 @@ impl HoaLexer {
 
                         // handle all simple syntactic elements
                         b'!' => {
-                            tokens.push(Token::new(TokenType::TokenNot, line, col));
+                            tokens.push(Token::new(TokenNot, line, col));
                             it.next();
                         }
                         b'&' => {
-                            tokens.push(Token::new(TokenType::TokenAnd, line, col));
+                            tokens.push(Token::new(TokenAnd, line, col));
                             it.next();
                         }
                         b'|' => {
-                            tokens.push(Token::new(TokenType::TokenOr, line, col));
+                            tokens.push(Token::new(TokenOr, line, col));
                             it.next();
                         }
                         b'(' => {
-                            tokens.push(Token::new(TokenType::TokenLparenth, line, col));
+                            tokens.push(Token::new(TokenLparenth, line, col));
                             it.next();
                         }
                         b')' => {
-                            tokens.push(Token::new(TokenType::TokenRparenth, line, col));
+                            tokens.push(Token::new(TokenRparenth, line, col));
                             it.next();
                         }
                         b'[' => {
-                            tokens.push(Token::new(TokenType::TokenLbracket, line, col));
+                            tokens.push(Token::new(TokenLbracket, line, col));
                             it.next();
                         }
                         b']' => {
-                            tokens.push(Token::new(TokenType::TokenRbracket, line, col));
+                            tokens.push(Token::new(TokenRbracket, line, col));
                             it.next();
                         }
                         b'{' => {
-                            tokens.push(Token::new(TokenType::TokenLcurly, line, col));
+                            tokens.push(Token::new(TokenLcurly, line, col));
                             it.next();
                         }
                         b'}' => {
-                            tokens.push(Token::new(TokenType::TokenRcurly, line, col));
+                            tokens.push(Token::new(TokenRcurly, line, col));
                             it.next();
                         }
 
@@ -401,7 +447,7 @@ impl HoaLexer {
                             match it.next() {
                                 Some((b'-', _, _)) => {}
                                 _ => {
-                                    return Err("tokens need two dashes (--)");
+                                    return Err(MissingSymbol { expected: b'-' });
                                 }
                             }
                             match it.next() {
@@ -410,14 +456,13 @@ impl HoaLexer {
                                     let abort_rest = "BORT--".bytes().collect::<Vec<_>>();
                                     match take_n(&mut it, abort_rest.len()) {
                                         Some(word) if word == abort_rest => {
-                                            tokens.push(Token::new(
-                                                TokenType::TokenAbort,
-                                                line,
-                                                col,
-                                            ));
+                                            tokens.push(Token::new(TokenAbort, line, col));
                                         }
                                         _ => {
-                                            return Err("unrecognized token, expected ABORT");
+                                            return Err(UnrecognizedToken {
+                                                expected: Some(TokenAbort),
+                                                last: b'A',
+                                            });
                                         }
                                     }
                                 }
@@ -425,14 +470,13 @@ impl HoaLexer {
                                     let body_rest = "ODY--".bytes().collect::<Vec<_>>();
                                     match take_n(&mut it, body_rest.len()) {
                                         Some(word) if word == body_rest => {
-                                            tokens.push(Token::new(
-                                                TokenType::TokenBody,
-                                                line,
-                                                col,
-                                            ));
+                                            tokens.push(Token::new(TokenBody, line, col));
                                         }
                                         _ => {
-                                            return Err("unrecognized token, expected BODY");
+                                            return Err(UnrecognizedToken {
+                                                expected: Some(TokenBody),
+                                                last: b'B',
+                                            });
                                         }
                                     }
                                 }
@@ -440,14 +484,23 @@ impl HoaLexer {
                                     let end_rest = "ND--".bytes().collect::<Vec<_>>();
                                     match take_n(&mut it, end_rest.len()) {
                                         Some(word) if word == end_rest => {
-                                            tokens.push(Token::new(TokenType::TokenEnd, line, col));
+                                            tokens.push(Token::new(TokenEnd, line, col));
                                         }
                                         _ => {
-                                            return Err("unrecognized token, expected END");
+                                            return Err(UnrecognizedToken {
+                                                expected: Some(TokenEnd),
+                                                last: b'E',
+                                            });
                                         }
                                     }
                                 }
-                                _ => return Err("unexpected token, can be ABORT, BODY and END"),
+                                Some((c, _, _)) => {
+                                    return Err(UnrecognizedToken {
+                                        expected: None,
+                                        last: c,
+                                    })
+                                }
+                                _ => return Err(PrematureEnd { line, col }),
                             }
                         }
 
@@ -470,12 +523,12 @@ impl HoaLexer {
                                         len += 1;
                                     }
                                     None => {
-                                        return Err("premature end of file in quoted string");
+                                        return Err(PrematureEnd { line, col });
                                     }
                                 };
                             }
                             tokens.push(Token::new_with_string(
-                                TokenType::TokenString,
+                                TokenString,
                                 line,
                                 col,
                                 &self.input[start..(start + len)],
@@ -503,15 +556,10 @@ impl HoaLexer {
                             // try to convert the buffer to a number
                             match number_string.parse::<usize>() {
                                 Ok(num) => {
-                                    tokens.push(Token::new_with_int(
-                                        TokenType::TokenInt,
-                                        line,
-                                        col,
-                                        num,
-                                    ));
+                                    tokens.push(Token::new_with_int(TokenInt, line, col, num));
                                 }
                                 Err(_) => {
-                                    return Err("error while parsing integer");
+                                    return Err(IntParseError { line, col });
                                 }
                             }
                         }
@@ -542,7 +590,7 @@ impl HoaLexer {
                             // advance by the number of peeked characters
                             advance_by(&mut it, buffer.len());
                             tokens.push(Token::new_with_string(
-                                TokenType::TokenAliasName,
+                                TokenAliasName,
                                 line,
                                 col,
                                 &self.input[start..(start + len)],
@@ -582,7 +630,7 @@ impl HoaLexer {
                                     }
                                     None => {
                                         tokens.push(Token::new_with_string(
-                                            TokenType::TokenHeaderName,
+                                            TokenHeaderName,
                                             line,
                                             col,
                                             &self.input[start..(start + len)],
@@ -592,21 +640,21 @@ impl HoaLexer {
                             } else {
                                 if buffer == "t".to_string() {
                                     tokens.push(Token::new_with_string(
-                                        TokenType::TokenTrue,
+                                        TokenTrue,
                                         line,
                                         col,
                                         &self.input[start..(start + len)],
                                     ));
                                 } else if buffer == "f".to_string() {
                                     tokens.push(Token::new_with_string(
-                                        TokenType::TokenFalse,
+                                        TokenFalse,
                                         line,
                                         col,
                                         &self.input[start..(start + len)],
                                     ));
                                 } else {
                                     tokens.push(Token::new_with_string(
-                                        TokenType::TokenIdent,
+                                        TokenIdent,
                                         line,
                                         col,
                                         &self.input[start..(start + len)],
@@ -621,7 +669,7 @@ impl HoaLexer {
                             'block_comments: loop {
                                 let wrd = peek_n(&mut it, 2);
                                 match wrd {
-                                    None => return Err("unexpected comment ending"),
+                                    None => return Err(PrematureEnd { line, col }),
                                     Some(chrs) => {
                                         if chrs != vec![b'*', b'/'] {
                                             it.reset_peek();
@@ -636,6 +684,7 @@ impl HoaLexer {
                             }
                         }
 
+                        // todo: entfernen?
                         d => {
                             println!("got: {:#?}", d as char);
                             it.next();
@@ -676,12 +725,12 @@ impl HoaLexer {
 }
 
 impl TryFrom<&[u8]> for HoaLexer {
-    type Error = &'static str;
+    type Error = LexerError;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
         let contents = match from_utf8(value) {
             Ok(txt) => txt,
-            Err(_) => return Err("could not parse input data"),
+            Err(_) => return Err(ParseInputError {}),
         };
 
         Ok(HoaLexer {
