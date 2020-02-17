@@ -1,6 +1,7 @@
 use Token::*;
 
 // todo refactor tokens to be positioned or not
+#[derive(Clone, Debug, Copy, PartialEq, Hash)]
 pub struct PositionedToken<'a> {
     token: Token<'a>,
     line: usize,
@@ -9,74 +10,124 @@ pub struct PositionedToken<'a> {
 
 #[derive(Clone, Debug, Copy, PartialEq, Hash)]
 pub enum Token<'a> {
-    TokenInt(usize, usize, usize),
-    TokenIdent(usize, usize, &'a str),
-    TokenString(usize, usize, &'a str),
-    TokenHeaderName(usize, usize, &'a str),
-    TokenAliasName(usize, usize, &'a str),
-    TokenEof(usize, usize),
-    TokenBody(usize, usize),
-    TokenEnd(usize, usize),
-    TokenAbort(usize, usize),
-    TokenHoa(usize, usize),
-    TokenState(usize, usize),
-    TokenStates(usize, usize),
-    TokenStart(usize, usize),
-    TokenAp(usize, usize),
-    TokenAlias(usize, usize),
-    TokenAcceptance(usize, usize),
-    TokenAccname(usize, usize),
-    TokenTool(usize, usize),
-    TokenName(usize, usize),
-    TokenProperties(usize, usize),
-    TokenNot(usize, usize),
-    TokenAnd(usize, usize),
-    TokenOr(usize, usize),
-    TokenLparenth(usize, usize),
-    TokenRparenth(usize, usize),
-    TokenLbracket(usize, usize),
-    TokenRbracket(usize, usize),
-    TokenLcurly(usize, usize),
-    TokenRcurly(usize, usize),
-    TokenTrue(usize, usize),
-    TokenFalse(usize, usize),
+    TokenInt(usize),
+    TokenIdent(&'a str),
+    TokenString(&'a str),
+    TokenHeaderName(&'a str),
+    TokenAliasName(&'a str),
+    TokenEof,
+    TokenBody,
+    TokenEnd,
+    TokenAbort,
+    TokenHoa,
+    TokenState,
+    TokenStates,
+    TokenStart,
+    TokenAp,
+    TokenAlias,
+    TokenAcceptance,
+    TokenAccname,
+    TokenTool,
+    TokenName,
+    TokenProperties,
+    TokenNot,
+    TokenAnd,
+    TokenOr,
+    TokenLparenth,
+    TokenRparenth,
+    TokenLbracket,
+    TokenRbracket,
+    TokenLcurly,
+    TokenRcurly,
+    TokenTrue,
+    TokenFalse,
+}
+
+impl<'a> Token<'a> {
+    pub(crate) fn at(self, line: usize, col: usize) -> PositionedToken<'a> {
+        PositionedToken {
+            token: self,
+            line,
+            col,
+        }
+    }
 }
 
 impl<'a> std::fmt::Display for Token<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            TokenInt(line, col, int) => write!(f, "INT({}) at {},{}", int, line, col),
-            TokenIdent(line, col, ident) => write!(f, "IDENT({}) at {},{}", ident, line, col),
-            TokenString(line, col, string) => write!(f, "STR({}) at {},{}", string, line, col),
-            TokenHeaderName(line, col, name) => write!(f, "HEADER({}) at {},{}", name, line, col),
-            TokenAliasName(line, col, alias) => write!(f, "ALIAS(@{}) at {},{}", alias, line, col),
+            TokenInt(ap) => write!(f, "{}", ap),
+            TokenIdent(ident) => write!(f, "'{}'", ident),
+            TokenString(string) => write!(f, "\"{}\"", string),
+            TokenHeaderName(name) => write!(f, "HEADER({})", name),
+            TokenAliasName(alias) => write!(f, "@{}", alias),
 
-            TokenEof(line, col) => write!(f, "EOF at {}, {}", line, col),
-            TokenBody(line, col) => write!(f, "--BODY-- at {}, {}", line, col),
-            TokenEnd(line, col) => write!(f, "--END-- at {}, {}", line, col),
-            TokenAbort(line, col) => write!(f, "--ABORT-- at {}, {}", line, col),
-            TokenHoa(line, col) => write!(f, "HOA: at {}, {}", line, col),
-            TokenState(line, col) => write!(f, "State: at {}, {}", line, col),
-            TokenStates(line, col) => write!(f, "States: at {}, {}", line, col),
-            TokenStart(line, col) => write!(f, "Start: at {}, {}", line, col),
-            TokenAp(line, col) => write!(f, "Ap: at {}, {}", line, col),
-            TokenAlias(line, col) => write!(f, "Alias: at {}, {}", line, col),
-            TokenAcceptance(line, col) => write!(f, "Acceptance: at {}, {}", line, col),
-            TokenAccname(line, col) => write!(f, "Accname: at {}, {}", line, col),
-            TokenTool(line, col) => write!(f, "tool: at {}, {}", line, col),
-            TokenName(line, col) => write!(f, "name: at {}, {}", line, col),
-            TokenProperties(line, col) => write!(f, "properties: at {}, {}", line, col),
-            TokenNot(line, col) => write!(f, "! at {}, {}", line, col),
-            TokenAnd(line, col) => write!(f, "& at {}, {}", line, col),
-            TokenOr(line, col) => write!(f, "| at {}, {}", line, col),
-            TokenLparenth(line, col) => write!(f, "( at {}, {}", line, col),
-            TokenRparenth(line, col) => write!(f, ") at {}, {}", line, col),
-            TokenLbracket(line, col) => write!(f, "[ at {}, {}", line, col),
-            TokenRbracket(line, col) => write!(f, "] at {}, {}", line, col),
-            TokenLcurly(line, col) => write!(f, "{{ at {}, {}", line, col),
-            TokenRcurly(line, col) => write!(f, "}} at {}, {}", line, col),
-            TokenTrue(line, col) => write!(f, "t at {}, {}", line, col),
-            TokenFalse(line, col) => write!(f, "f at {}, {}", line, col),
+            TokenNot => write!(f, "!"),
+            TokenAnd => write!(f, "&"),
+            TokenOr => write!(f, "|"),
+            TokenLparenth => write!(f, "("),
+            TokenRparenth => write!(f, ")"),
+            TokenLbracket => write!(f, "["),
+            TokenRbracket => write!(f, "]"),
+            TokenLcurly => write!(f, "{{"),
+            TokenRcurly => write!(f, "}}"),
+            TokenTrue => write!(f, "t"),
+            TokenFalse => write!(f, "f"),
+
+            TokenEof => write!(f, "EOF"),
+            TokenBody => write!(f, "--BODY--"),
+            TokenEnd => write!(f, "--END--"),
+            TokenAbort => write!(f, "--ABORT--"),
+            TokenHoa => write!(f, "HOA: "),
+            TokenState => write!(f, "State: "),
+            TokenStates => write!(f, "States: "),
+            TokenStart => write!(f, "Start: "),
+            TokenAp => write!(f, "AP: "),
+            TokenAlias => write!(f, "Alias: "),
+            TokenAcceptance => write!(f, "Acceptance: "),
+            TokenAccname => write!(f, "acc-name: "),
+            TokenTool => write!(f, "tool: "),
+            TokenName => write!(f, "name: "),
+            TokenProperties => write!(f, "properties: "),
+        }
+    }
+}
+
+impl<'a> std::fmt::Display for PositionedToken<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self.token {
+            TokenInt(int) => write!(f, "INT({}) at {},{}", int, self.line, self.col),
+            TokenIdent(ident) => write!(f, "IDENT({}) at {},{}", ident, self.line, self.col),
+            TokenString(string) => write!(f, "STR({}) at {},{}", string, self.line, self.col),
+            TokenHeaderName(name) => write!(f, "HEADER({}) at {},{}", name, self.line, self.col),
+            TokenAliasName(alias) => write!(f, "ALIAS(@{}) at {},{}", alias, self.line, self.col),
+
+            TokenEof => write!(f, "EOF at {}, {}", self.line, self.col),
+            TokenBody => write!(f, "--BODY-- at {}, {}", self.line, self.col),
+            TokenEnd => write!(f, "--END-- at {}, {}", self.line, self.col),
+            TokenAbort => write!(f, "--ABORT-- at {}, {}", self.line, self.col),
+            TokenHoa => write!(f, "HOA: at {}, {}", self.line, self.col),
+            TokenState => write!(f, "State: at {}, {}", self.line, self.col),
+            TokenStates => write!(f, "States: at {}, {}", self.line, self.col),
+            TokenStart => write!(f, "Start: at {}, {}", self.line, self.col),
+            TokenAp => write!(f, "Ap: at {}, {}", self.line, self.col),
+            TokenAlias => write!(f, "Alias: at {}, {}", self.line, self.col),
+            TokenAcceptance => write!(f, "Acceptance: at {}, {}", self.line, self.col),
+            TokenAccname => write!(f, "Accname: at {}, {}", self.line, self.col),
+            TokenTool => write!(f, "tool: at {}, {}", self.line, self.col),
+            TokenName => write!(f, "name: at {}, {}", self.line, self.col),
+            TokenProperties => write!(f, "properties: at {}, {}", self.line, self.col),
+            TokenNot => write!(f, "! at {}, {}", self.line, self.col),
+            TokenAnd => write!(f, "& at {}, {}", self.line, self.col),
+            TokenOr => write!(f, "| at {}, {}", self.line, self.col),
+            TokenLparenth => write!(f, "( at {}, {}", self.line, self.col),
+            TokenRparenth => write!(f, ") at {}, {}", self.line, self.col),
+            TokenLbracket => write!(f, "[ at {}, {}", self.line, self.col),
+            TokenRbracket => write!(f, "] at {}, {}", self.line, self.col),
+            TokenLcurly => write!(f, "{{ at {}, {}", self.line, self.col),
+            TokenRcurly => write!(f, "}} at {}, {}", self.line, self.col),
+            TokenTrue => write!(f, "t at {}, {}", self.line, self.col),
+            TokenFalse => write!(f, "f at {}, {}", self.line, self.col),
         }
     }
 }
@@ -87,7 +138,7 @@ mod tests {
 
     #[test]
     fn simple_token_print_test() {
-        let tkn = TokenAliasName(2, 7, "hallO");
+        let tkn = TokenAliasName("hallO");
         println!("{}", tkn);
     }
 }

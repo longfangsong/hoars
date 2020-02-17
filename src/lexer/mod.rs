@@ -1,4 +1,5 @@
 mod token;
+use token::PositionedToken;
 use token::Token::*;
 pub use token::*;
 
@@ -49,7 +50,7 @@ pub struct HoaLexer<'a> {
     line: usize,
     col: usize,
     curr: char,
-    known_headers: HashMap<&'static str, fn(usize, usize) -> Token<'a>>,
+    known_headers: HashMap<&'static str, Token<'a>>,
     input: String,
     lines: Vec<String>,
     is_eof: bool,
@@ -79,8 +80,8 @@ impl fmt::Display for LexerError<'_> {
 }
 
 impl<'a> HoaLexer<'a> {
-    fn build_known_headers() -> HashMap<&'static str, fn(usize, usize) -> Token<'a>> {
-        let mut hm: HashMap<&'static str, fn(usize, usize) -> Token<'a>> = HashMap::new();
+    fn build_known_headers() -> HashMap<&'static str, Token<'a>> {
+        let mut hm: HashMap<&'static str, Token<'a>> = HashMap::new();
         hm.insert("HOA:", TokenHoa);
         hm.insert("State:", TokenState);
         hm.insert("States:", TokenStates);
@@ -95,7 +96,7 @@ impl<'a> HoaLexer<'a> {
         hm
     }
 
-    pub fn tokenize(&mut self) -> Result<Vec<Token>, LexerError> {
+    pub fn tokenize(&mut self) -> Result<Vec<PositionedToken>, LexerError> {
         let mut tokens = Vec::new();
         // create an iterator that is able to peek multiple times so we can determine tokens
         let mut it = itertools::multipeek(self.iterator_from(0, 0));
@@ -107,10 +108,8 @@ impl<'a> HoaLexer<'a> {
                 // there are no characters left
                 None => {
                     // add an EOF token and calculate position based on lines and length of last line
-                    tokens.push(TokenEof(
-                        self.lines.len() - 1,
-                        self.lines.last().unwrap().len(),
-                    ));
+                    tokens
+                        .push(TokenEof.at(self.lines.len() - 1, self.lines.last().unwrap().len()));
                     // exit the loop
                     break 'outer;
                 }
@@ -126,39 +125,39 @@ impl<'a> HoaLexer<'a> {
 
                         // handle all simple syntactic elements
                         b'!' => {
-                            tokens.push(TokenNot(line, col));
+                            tokens.push(TokenNot.at(line, col));
                             it.next();
                         }
                         b'&' => {
-                            tokens.push(TokenAnd(line, col));
+                            tokens.push(TokenAnd.at(line, col));
                             it.next();
                         }
                         b'|' => {
-                            tokens.push(TokenOr(line, col));
+                            tokens.push(TokenOr.at(line, col));
                             it.next();
                         }
                         b'(' => {
-                            tokens.push(TokenLparenth(line, col));
+                            tokens.push(TokenLparenth.at(line, col));
                             it.next();
                         }
                         b')' => {
-                            tokens.push(TokenRparenth(line, col));
+                            tokens.push(TokenRparenth.at(line, col));
                             it.next();
                         }
                         b'[' => {
-                            tokens.push(TokenLbracket(line, col));
+                            tokens.push(TokenLbracket.at(line, col));
                             it.next();
                         }
                         b']' => {
-                            tokens.push(TokenRbracket(line, col));
+                            tokens.push(TokenRbracket.at(line, col));
                             it.next();
                         }
                         b'{' => {
-                            tokens.push(TokenLcurly(line, col));
+                            tokens.push(TokenLcurly.at(line, col));
                             it.next();
                         }
                         b'}' => {
-                            tokens.push(TokenRcurly(line, col));
+                            tokens.push(TokenRcurly.at(line, col));
                             it.next();
                         }
 
@@ -177,11 +176,11 @@ impl<'a> HoaLexer<'a> {
                                     let abort_rest = "BORT--".bytes().collect::<Vec<_>>();
                                     match take_n(&mut it, abort_rest.len()) {
                                         Some(word) if word == abort_rest => {
-                                            tokens.push(TokenAbort(line, col));
+                                            tokens.push(TokenAbort.at(line, col));
                                         }
                                         _ => {
                                             return Err(UnrecognizedToken {
-                                                expected: Some(TokenAbort(line, col)),
+                                                expected: Some(TokenAbort),
                                                 last: b'A',
                                             });
                                         }
@@ -191,11 +190,11 @@ impl<'a> HoaLexer<'a> {
                                     let body_rest = "ODY--".bytes().collect::<Vec<_>>();
                                     match take_n(&mut it, body_rest.len()) {
                                         Some(word) if word == body_rest => {
-                                            tokens.push(TokenBody(line, col));
+                                            tokens.push(TokenBody.at(line, col));
                                         }
                                         _ => {
                                             return Err(UnrecognizedToken {
-                                                expected: Some(TokenBody(line, col)),
+                                                expected: Some(TokenBody),
                                                 last: b'B',
                                             });
                                         }
@@ -205,11 +204,11 @@ impl<'a> HoaLexer<'a> {
                                     let end_rest = "ND--".bytes().collect::<Vec<_>>();
                                     match take_n(&mut it, end_rest.len()) {
                                         Some(word) if word == end_rest => {
-                                            tokens.push(TokenEnd(line, col));
+                                            tokens.push(TokenEnd.at(line, col));
                                         }
                                         _ => {
                                             return Err(UnrecognizedToken {
-                                                expected: Some(TokenEnd(line, col)),
+                                                expected: Some(TokenEnd),
                                                 last: b'E',
                                             });
                                         }
@@ -248,7 +247,8 @@ impl<'a> HoaLexer<'a> {
                                     }
                                 };
                             }
-                            tokens.push(TokenString(line, col, &self.input[start..(start + len)]));
+                            tokens
+                                .push(TokenString(&self.input[start..(start + len)]).at(line, col));
                         }
 
                         // extract numbers
@@ -272,7 +272,7 @@ impl<'a> HoaLexer<'a> {
                             // try to convert the buffer to a number
                             match number_string.parse::<usize>() {
                                 Ok(num) => {
-                                    tokens.push(TokenInt(line, col, num));
+                                    tokens.push(TokenInt(num).at(line, col));
                                 }
                                 Err(_) => {
                                     return Err(IntParseError { line, col });
@@ -305,11 +305,9 @@ impl<'a> HoaLexer<'a> {
                             }
                             // advance by the number of peeked characters
                             advance_by(&mut it, buffer.len());
-                            tokens.push(TokenAliasName(
-                                line,
-                                col,
-                                &self.input[start..(start + len)],
-                            ));
+                            tokens.push(
+                                TokenAliasName(&self.input[start..(start + len)]).at(line, col),
+                            );
                         }
 
                         // handle identifiers, headers, t and f
@@ -341,27 +339,24 @@ impl<'a> HoaLexer<'a> {
                             if buffer.chars().last().unwrap() == ':' {
                                 match self.known_headers.get(buffer.as_str()) {
                                     Some(tokentype) => {
-                                        tokens.push(tokentype(line, col));
+                                        tokens.push(tokentype.at(line, col));
                                     }
                                     None => {
-                                        tokens.push(TokenHeaderName(
-                                            line,
-                                            col,
-                                            &self.input[start..(start + len)],
-                                        ));
+                                        tokens.push(
+                                            TokenHeaderName(&self.input[start..(start + len)])
+                                                .at(line, col),
+                                        );
                                     }
                                 }
                             } else {
                                 if buffer == "t".to_string() {
-                                    tokens.push(TokenTrue(line, col));
+                                    tokens.push(TokenTrue.at(line, col));
                                 } else if buffer == "f".to_string() {
-                                    tokens.push(TokenFalse(line, col));
+                                    tokens.push(TokenFalse.at(line, col));
                                 } else {
-                                    tokens.push(TokenIdent(
-                                        line,
-                                        col,
-                                        &self.input[start..(start + len)],
-                                    ));
+                                    tokens.push(
+                                        TokenIdent(&self.input[start..(start + len)]).at(line, col),
+                                    );
                                 }
                             }
                         }
