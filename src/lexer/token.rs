@@ -1,6 +1,13 @@
 use Token::*;
 
-#[derive(Clone, Debug, Copy, PartialEq, Eq, Hash)]
+// todo refactor tokens to be positioned or not
+pub struct PositionedToken<'a> {
+    token: Token<'a>,
+    line: usize,
+    col: usize,
+}
+
+#[derive(Clone, Debug, Copy, PartialEq, Hash)]
 pub enum Token<'a> {
     TokenInt(usize, usize, usize),
     TokenIdent(usize, usize, &'a str),

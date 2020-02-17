@@ -4,8 +4,8 @@ pub use utils::*;
 
 pub mod consumer;
 mod lexer;
-//pub mod parser;
-//pub use parser::HoaParser;
+pub mod parser;
+pub use parser::HoaParser;
 
 use lexer::{HoaLexer, Token};
 
