@@ -31,7 +31,7 @@ fn parse_expr_conjunct<'a>(
     match token {
         Some(&TokenAnd) => {
             let (rhs, i) = parse_expr(tokens, next_pos + 1)?;
-            Ok((node_atom.and(rhs), i))
+            Ok((node_atom * rhs, i))
         }
         _ => Ok((node_atom, next_pos)),
     }
@@ -92,7 +92,7 @@ fn parse_expr<'a>(
     match token {
         Some(TokenOr) => {
             let (rhs, i) = parse_expr(tokens, next_pos + 1)?;
-            Ok((node_atom.or(rhs), i))
+            Ok((node_atom + rhs, i))
         }
         _ => Ok((node_atom, next_pos)),
     }
@@ -103,9 +103,15 @@ mod tests {
     use super::*;
 
     #[test]
+    fn parse_alias_not_binding_test() {
+        let input = vec![TokenNot, TokenTrue, TokenOr, TokenFalse];
+        println!("{}", parse_expr(&input, 0).unwrap().0);
+    }
+
+    #[test]
     fn parse_alias_atom_test() {
         let input = vec![TokenInt(7)];
-        println!("{:#?}", parse_expr(&input, 0).unwrap().0);
+        println!("{}", parse_expr(&input, 0).unwrap().0);
     }
 
     #[test]
@@ -128,7 +134,7 @@ mod tests {
 
     #[test]
     fn parse_alias_binding_test() {
-        let input = vec![TokenTrue, TokenAnd, TokenFalse, TokenOr, TokenFalse];
+        let input = vec![TokenTrue, TokenOr, TokenFalse, TokenAnd, TokenFalse];
         println!("{}", parse_expr(&input, 0).unwrap().0);
     }
 

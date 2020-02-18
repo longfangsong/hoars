@@ -1,6 +1,6 @@
 use Token::*;
 
-// todo refactor tokens to be positioned or not
+/// Annotates a Token with additional data, for now that is only its position in the source
 #[derive(Clone, Debug, Copy, PartialEq, Hash)]
 pub struct PositionedToken<'a> {
     token: Token<'a>,
@@ -8,6 +8,7 @@ pub struct PositionedToken<'a> {
     col: usize,
 }
 
+/// A Token in the input is represented here. It can potentially hold relevant data like string.
 #[derive(Clone, Debug, Copy, PartialEq, Hash)]
 pub enum Token<'a> {
     TokenInt(usize),

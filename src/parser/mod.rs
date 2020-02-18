@@ -38,9 +38,15 @@ pub enum ParserError<'a> {
         message: String,
     },
 }
+
+/// The structure holding all relevant information for parsing a HOA encoded automaton.
 pub struct HoaParser<'a, C: HoaConsumer> {
+    /// the consumer which receives the automaton
     consumer: C,
+    /// a lexer that tokenizes the input
     lexer: HoaLexer<'a>,
+    /// the actual input which is passed in when the parser is constructed. It also determines
+    /// the lifetime of a parser.
     input: &'a [u8],
 }
 
@@ -89,18 +95,6 @@ impl<'a> fmt::Display for ParserError<'a> {
             ),
             _ => write!(f, "unexpected end"),
         }
-    }
-}
-
-fn matching(c: u8) -> u8 {
-    match c {
-        b'(' => b')',
-        b')' => b'(',
-        b'[' => b']',
-        b']' => b'[',
-        b'{' => b'}',
-        b'}' => b'{',
-        _ => panic!("should have been parenthesis!"),
     }
 }
 

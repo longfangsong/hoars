@@ -1,11 +1,14 @@
 use crate::lexer::Token;
 use std::convert::TryFrom;
 use std::fmt::{Debug, Error, Formatter};
+use std::ops::{Add, Mul, Neg};
 use BooleanAtom::*;
 use BooleanExpression::*;
 
 type StartStates = Vec<usize>;
 
+/// A boolean atom represents the pieces of which a BooleanExpression is made up of. It can be one
+/// of true (t), false (f), an integer value representing an atomic proposition or an alias name
 #[derive(Debug)]
 pub enum BooleanAtom<'a> {
     BooleanValue(bool),
@@ -13,6 +16,8 @@ pub enum BooleanAtom<'a> {
     AliasName(&'a str),
 }
 
+/// Boolean expressions are made up of boolean atoms that can be negated or combined with the
+/// junctor 'or' and 'and'
 #[derive(Debug)]
 pub enum BooleanExpression<'a> {
     Atom(BooleanAtom<'a>),
@@ -22,6 +27,7 @@ pub enum BooleanExpression<'a> {
 }
 
 #[derive(Debug)]
+/// Represents an identifier for the acceptance component
 pub enum AcceptanceIdent {
     Fin(usize),
     FinNeg(usize),
@@ -29,12 +35,37 @@ pub enum AcceptanceIdent {
     InfNeg(usize),
 }
 
+/// Acceptance conditions are made up of boolean combinations of acceptance identifiers
 #[derive(Debug)]
 pub enum AcceptanceCondition {
     Atom(AcceptanceIdent),
     Conjunction(Box<AcceptanceCondition>, Box<AcceptanceCondition>),
     Disjunction(Box<AcceptanceCondition>, Box<AcceptanceCondition>),
     BooleanValue(bool),
+}
+
+impl<'a> Mul for BooleanExpression<'a> {
+    type Output = BooleanExpression<'a>;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        self.and(rhs)
+    }
+}
+
+impl<'a> Add for BooleanExpression<'a> {
+    type Output = BooleanExpression<'a>;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        self.or(rhs)
+    }
+}
+
+impl<'a> Neg for BooleanExpression<'a> {
+    type Output = BooleanExpression<'a>;
+
+    fn neg(self) -> Self::Output {
+        self.not()
+    }
 }
 
 impl<'a> From<BooleanAtom<'a>> for BooleanExpression<'a> {
