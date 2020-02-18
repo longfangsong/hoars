@@ -3,13 +3,13 @@ use Token::*;
 /// Annotates a Token with additional data, for now that is only its position in the source
 #[derive(Clone, Debug, Copy, PartialEq, Hash)]
 pub struct PositionedToken<'a> {
-    token: Token<'a>,
-    line: usize,
-    col: usize,
+    pub token: Token<'a>,
+    pub line: usize,
+    pub col: usize,
 }
 
 /// A Token in the input is represented here. It can potentially hold relevant data like string.
-#[derive(Clone, Debug, Copy, PartialEq, Hash)]
+#[derive(Clone, Debug, Copy, Hash)]
 pub enum Token<'a> {
     TokenInt(usize),
     TokenIdent(&'a str),
@@ -44,8 +44,37 @@ pub enum Token<'a> {
     TokenFalse,
 }
 
+pub const INTEGER: Token<'static> = TokenInt(0);
+pub const IDENTIFIER: Token<'static> = TokenIdent("");
+pub const STRING: Token<'static> = TokenString("");
+pub const HEADER_NAME: Token<'static> = TokenHeaderName("");
+pub const ALIAS_NAME: Token<'static> = TokenAliasName("");
+
+impl<'a> PartialEq for Token<'a> {
+    fn eq(&self, other: &Self) -> bool {
+        std::mem::discriminant(self) == std::mem::discriminant(other)
+    }
+}
+
 impl<'a> Token<'a> {
-    pub(crate) fn at(self, line: usize, col: usize) -> PositionedToken<'a> {
+    pub fn unwrap_int(&self) -> usize {
+        match self {
+            TokenInt(int) => *int,
+            _ => panic!("expected TokenInt"),
+        }
+    }
+
+    pub fn unwap_str(&self) -> &'a str {
+        match self {
+            TokenIdent(content) => *content,
+            TokenString(content) => *content,
+            TokenHeaderName(content) => *content,
+            TokenAliasName(content) => *content,
+            _ => panic!("expected token containing string"),
+        }
+    }
+
+    pub fn at(self, line: usize, col: usize) -> PositionedToken<'a> {
         PositionedToken {
             token: self,
             line,

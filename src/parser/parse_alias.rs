@@ -25,7 +25,7 @@ fn match_alias_atom<'a>(
 fn parse_expr_conjunct<'a>(
     tokens: &Vec<Token<'a>>,
     pos: usize,
-) -> Result<(BooleanExpression<'a>, usize), ParserError<'a>> {
+) -> Result<(BooleanExpression<'a>, usize), ParserError> {
     let (node_atom, next_pos) = parse_expr_term(tokens, pos)?;
     let token = tokens.get(next_pos);
     match token {
@@ -40,7 +40,7 @@ fn parse_expr_conjunct<'a>(
 fn parse_expr_term<'a>(
     tokens: &Vec<Token<'a>>,
     pos: usize,
-) -> Result<(BooleanExpression<'a>, usize), ParserError<'a>> {
+) -> Result<(BooleanExpression<'a>, usize), ParserError> {
     if let Some(token) = tokens.get(pos) {
         match token {
             TokenInt(ap) => Ok((BooleanAtom::bint(*ap).into(), pos + 1)),
@@ -86,7 +86,7 @@ fn parse_expr_term<'a>(
 fn parse_expr<'a>(
     tokens: &Vec<Token<'a>>,
     pos: usize,
-) -> Result<(BooleanExpression<'a>, usize), ParserError<'a>> {
+) -> Result<(BooleanExpression<'a>, usize), ParserError> {
     let (node_atom, next_pos) = parse_expr_conjunct(tokens, pos)?;
     let token = tokens.get(next_pos);
     match token {
@@ -105,19 +105,19 @@ mod tests {
     #[test]
     fn parse_alias_not_binding_test() {
         let input = vec![TokenNot, TokenTrue, TokenOr, TokenFalse];
-        println!("{}", parse_expr(&input, 0).unwrap().0);
+        println!("{}", parse_expr(&input, 0).ok().unwrap().0);
     }
 
     #[test]
     fn parse_alias_atom_test() {
         let input = vec![TokenInt(7)];
-        println!("{}", parse_expr(&input, 0).unwrap().0);
+        println!("{}", parse_expr(&input, 0).ok().unwrap().0);
     }
 
     #[test]
     fn parse_alias_negation_test() {
         let input = vec![TokenNot, TokenInt(17)];
-        println!("{}", parse_expr(&input, 0).unwrap().0);
+        println!("{}", parse_expr(&input, 0).ok().unwrap().0);
     }
 
     #[test]
@@ -129,13 +129,13 @@ mod tests {
             TokenAnd,
             TokenTrue,
         ];
-        println!("{}", parse_expr(&input, 0).unwrap().0);
+        println!("{}", parse_expr(&input, 0).ok().unwrap().0);
     }
 
     #[test]
     fn parse_alias_binding_test() {
         let input = vec![TokenTrue, TokenOr, TokenFalse, TokenAnd, TokenFalse];
-        println!("{}", parse_expr(&input, 0).unwrap().0);
+        println!("{}", parse_expr(&input, 0).ok().unwrap().0);
     }
 
     #[test]
@@ -150,7 +150,7 @@ mod tests {
             TokenInt(1),
             TokenRparenth,
         ];
-        println!("{}", parse_expr(&input, 0).unwrap().0);
+        println!("{}", parse_expr(&input, 0).ok().unwrap().0);
     }
 
     #[test]
@@ -163,7 +163,7 @@ mod tests {
             TokenAnd,
             TokenInt(1),
         ];
-        println!("{}", parse_expr(&input, 0).unwrap().0);
+        println!("{}", parse_expr(&input, 0).ok().unwrap().0);
     }
 
     #[test]
@@ -176,6 +176,6 @@ mod tests {
             TokenAnd,
             TokenInt(1),
         ];
-        println!("{}", parse_expr(&input, 0).unwrap().0);
+        println!("{}", parse_expr(&input, 0).ok().unwrap().0);
     }
 }

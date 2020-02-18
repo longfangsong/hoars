@@ -1,5 +1,5 @@
 mod token;
-use token::PositionedToken;
+pub use token::PositionedToken;
 use token::Token::*;
 pub use token::*;
 

@@ -1,4 +1,5 @@
 mod expression;
+
 pub use expression::*;
 
 mod combinators;
@@ -6,7 +7,7 @@ mod parse_alias;
 
 use crate::consumer::HoaConsumer;
 use crate::lexer::Token::*;
-use crate::lexer::{HoaLexer, Token};
+use crate::lexer::{HoaLexer, LexerError, PositionedToken, Token, IDENTIFIER, INTEGER};
 
 use std::borrow::Cow;
 use std::convert::{TryFrom, TryInto};
@@ -18,26 +19,38 @@ use ParserError::*;
 
 //type Result<'a, T, E = ParserError<'a>> = std::result::Result<T, E>;
 
-#[derive(Debug)]
-pub enum ParserError<'a> {
-    ExpressionParsingError {
-        expected: u8,
-        found: u8,
-        line: usize,
-        col: usize,
-    },
-    MissingToken {
-        expected: Token<'a>,
-    },
-    MismatchToken {
-        expected: Token<'a>,
-        line: usize,
-        col: usize,
-    },
-    UnexpectedEnd {
-        message: String,
-    },
+pub enum ParserError {
+    MismatchingToken { expected: String, actual: String },
+    MissingToken { expected: String },
+    UnexpectedEnd { message: String },
+    ExpressionParsingError { expected: String, found: String },
+    LexingError { message: String },
+    ZeroAtomicPropositions,
 }
+
+// #[derive(Debug)]
+// pub enum ParserError<'a> {
+//     LexingError {
+//         le: LexerError<'a>,
+//     },
+//     ExpressionParsingError {
+//         expected: u8,
+//         found: u8,
+//         line: usize,
+//         col: usize,
+//     },
+//     MissingToken {
+//         expected: Token<'a>,
+//     },
+//     MismatchToken {
+//         expected: Token<'a>,
+//         line: usize,
+//         col: usize,
+//     },
+//     UnexpectedEnd {
+//         message: String,
+//     },
+// }
 
 /// The structure holding all relevant information for parsing a HOA encoded automaton.
 pub struct HoaParser<'a, C: HoaConsumer> {
@@ -50,50 +63,48 @@ pub struct HoaParser<'a, C: HoaConsumer> {
     input: &'a [u8],
 }
 
-//fn expect<'a>(
-//    expected: Token<'a>,
-//    possible_token: Option<&Token<'a>>,
-//) -> Result<'a, &'a Token<'a>> {
-//    match possible_token {
-//        Some(actual) => {
-//            if std::mem::discriminant(&expected) == std::mem::discriminant(&actual) {
-//                return Err(MismatchToken {
-//                    expected,
-//                    line: actual.line,
-//                    col: actual.col,
-//                });
-//            } else {
-//                Ok(actual)
-//            }
-//        }
-//        None => return Err(MissingToken { expected }),
-//    }
-//}
+fn expect<'a>(
+    expected: Token<'a>,
+    possible_token: Option<&'a PositionedToken<'a>>,
+) -> Result<&'a PositionedToken<'a>, ParserError> {
+    match possible_token {
+        Some(actual) => {
+            if std::mem::discriminant(&expected) == std::mem::discriminant(&actual.token) {
+                return Err(MismatchingToken {
+                    expected: expected.to_string(),
+                    actual: actual.token.to_string(),
+                });
+            } else {
+                Ok(actual)
+            }
+        }
+        None => {
+            return Err(MissingToken {
+                expected: expected.to_string(),
+            })
+        }
+    }
+}
 
-impl<'a> fmt::Display for ParserError<'a> {
+impl<'a> fmt::Display for ParserError {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        match *self {
-            ExpressionParsingError {
-                expected,
-                found,
-                line,
-                col,
-            } => write!(
+        match self {
+            MissingToken { expected } => write!(f, "Necessary token {} is missing", expected),
+            MismatchingToken { expected, actual } => write!(
                 f,
-                "Expected {} but found {} in line {} column {}",
-                expected, found, line, col
+                "Syntax error, expected token {} but got {}",
+                expected, actual
             ),
-            MissingToken { expected } => write!(f, "Necessary token {:?} is missing", expected),
-            MismatchToken {
-                expected,
-                line,
-                col,
-            } => write!(
-                f,
-                "Syntax error, expected token {:?} in line {} column {}",
-                expected, line, col
-            ),
+            ZeroAtomicPropositions => write!(f, "At least one atomic proposition is needed"),
             _ => write!(f, "unexpected end"),
+        }
+    }
+}
+
+impl<'a> From<LexerError<'a>> for ParserError {
+    fn from(err: LexerError<'a>) -> Self {
+        LexingError {
+            message: err.to_string(),
         }
     }
 }
@@ -111,123 +122,74 @@ impl<'a, C: HoaConsumer> HoaParser<'a, C> {
         let tokens = self.lexer.tokenize();
     }
 
-    //    pub fn automaton(&mut self) -> Result<()> {
-    //        let tokens = match self.lexer.tokenize() {
-    //            Ok(tokens) => tokens,
-    //            Err(e) => return Err(MissingToken { expected: TokenEof }),
-    //        };
-    //        let mut it = tokens.iter().peekable();
-    //
-    //        // ensure that the HOA header is present
-    //        let hoa = expect(TokenHoa, it.next())?;
-    //        self.consumer.notify_header_start(hoa.string.unwrap());
-    //
-    //        // loop other possible header items
-    //        'header_items: loop {
-    //            let next = it.peek();
-    //            match next {
-    //                None => break 'header_items,
-    //                Some(&token) => {
-    //                    match token.kind {
-    //                        TokenStates => {
-    //                            // consume label
-    //                            expect(TokenStates, it.next())?;
-    //                            let states_count = expect(TokenInt, it.next())?;
-    //                            self.consumer
-    //                                .set_number_of_states(states_count.int.unwrap());
-    //                        }
-    //                        TokenStart => {
-    //                            // allocate a vec for the start states and consume token
-    //                            let mut start_states = Vec::new();
-    //                            expect(TokenStart, it.next())?;
-    //                            // we need at least one state that is the start state
-    //                            start_states.push(expect(TokenInt, it.next())?.int.unwrap());
-    //                            // loop to see if there are more states left
-    //                            'extract_starts: loop {
-    //                                match it.peek() {
-    //                                    Some(state) if state.kind == TokenInt => {
-    //                                        // found another initial state
-    //                                        start_states
-    //                                            .push(expect(TokenInt, it.next())?.int.unwrap());
-    //                                    }
-    //                                    _ => break 'extract_starts,
-    //                                }
-    //                            }
-    //                            // no need to reset peek as we are not using multipeek, notify consumer
-    //                            self.consumer.add_start_states(start_states);
-    //                            // todo: test this
-    //                        }
-    //                        TokenAp => {
-    //                            // consume the token and extract the number of atomic propositions
-    //                            expect(TokenAp, it.next())?;
-    //                            let num_aps = expect(TokenInt, it.next())?.int.unwrap();
-    //                            // ensure that there is at least one ap
-    //                            if num_aps < 1 {
-    //                                return Err(MissingToken { expected: TokenInt });
-    //                            }
-    //                            // allocate a vec and extract the exact number of aps
-    //                            let mut aps = Vec::new();
-    //                            for _ in 0..num_aps {
-    //                                aps.push(String::from(
-    //                                    expect(TokenIdent, it.next())?.string.unwrap(),
-    //                                ));
-    //                            }
-    //                            self.consumer.set_aps(aps);
-    //                            // todo: test this
-    //                        }
-    //                        TokenAlias => {
-    //                            // consume token and extract alias
-    //                            expect(TokenAlias, it.next())?;
-    //                            // first we get the alias name
-    //                            let alias_name =
-    //                                String::from(expect(TokenAliasName, it.next())?.string.unwrap());
-    //                            // now the label-expr
-    //
-    //                            todo!("alias and name extraction");
-    //                        }
-    //                        TokenAcceptance => {
-    //                            todo!("acceptance condition");
-    //                        }
-    //                        TokenAccname => {
-    //                            todo!("acceptance name");
-    //                        }
-    //                        TokenTool => {
-    //                            todo!("tool name extraction");
-    //                        }
-    //                        TokenName => {
-    //                            todo!("item name");
-    //                        }
-    //                        TokenProperties => {
-    //                            todo!("extract properties");
-    //                        }
-    //                        TokenHeaderName => {
-    //                            todo!("header misc item");
-    //                        }
-    //                        _ => break 'header_items,
-    //                    }
-    //                }
-    //            }
-    //            // consume the item as it was indeed a known header
-    //            // this is now done in the branches itself
-    //            // it.next();
-    //        }
-    //
-    //        // now we need to encounter a body token
-    //        expect(TokenBody, it.next())?;
-    //        self.consumer.notify_body_start();
-    //
-    //        // the body of the automaton
-    //
-    //        // finally we expect an end token
-    //        expect(TokenEnd, it.next())?;
-    //
-    //        // todo: should we also check if we're still in the midst of announcing a state
-    //
-    //        // we notify the receiver of the end
-    //        self.consumer.notify_end();
-    //
-    //        Ok(())
-    //    }
+    fn automaton(&mut self) -> Result<(), ParserError> {
+        let tokens = self.lexer.tokenize()?;
+        let mut it = tokens.iter().peekable();
+
+        // todo hoa token extraction
+        let hoa = expect(TokenHoa, it.next())?;
+        self.consumer.notify_header_start("");
+
+        'header_items: loop {
+            let next = it.peek();
+            match next {
+                None => break 'header_items,
+                Some(&token) => match token.token {
+                    TokenStates => {
+                        // consume token
+                        expect(TokenStates, it.next())?;
+
+                        // expect next token to be integer, consume it and unwrap the contained integer
+                        self.consumer.set_number_of_states(
+                            expect(TokenInt(0), it.next())?.token.unwrap_int(),
+                        );
+                    }
+                    TokenStart => {
+                        // allocate a vec for the start states and consume the token
+                        let mut start_states = Vec::new();
+                        expect(TokenStart, it.next())?;
+
+                        // there has to be at least one state so as above we expect an int, consume and unwrap it
+                        start_states.push(expect(TokenInt(0), it.next())?.token.unwrap_int());
+
+                        // loop through any further integer tokens to obtain all start states
+                        'extract_start_states: loop {
+                            match it.peek() {
+                                Some(state) if state.token == INTEGER => {
+                                    start_states
+                                        .push(expect(INTEGER, it.next())?.token.unwrap_int());
+                                }
+                                _ => break 'extract_start_states,
+                            }
+                        }
+
+                        self.consumer.add_start_states(start_states);
+                        // todo needs testing...
+                    }
+                    TokenAp => {
+                        expect(TokenAp, it.next())?;
+                        let num_aps = expect(INTEGER, it.next())?.token.unwrap_int();
+                        if num_aps < 1 {
+                            return Err(ZeroAtomicPropositions);
+                        }
+
+                        // allocate space and extract atomic propositions
+                        let mut aps = Vec::new();
+                        for _ in 0..num_aps {
+                            aps.push(String::from(
+                                expect(IDENTIFIER, it.next())?.token.unwap_str(),
+                            ));
+                        }
+                        self.consumer.set_aps(aps);
+                    }
+                    _ => unimplemented!(),
+                },
+            }
+        }
+
+        // finally return unit type as we have not encountered an error
+        Ok(())
+    }
 }
 
 #[cfg(test)]
