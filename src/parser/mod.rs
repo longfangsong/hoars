@@ -2,13 +2,13 @@ mod expression;
 
 pub use expression::*;
 
-mod combinators;
 mod expression_parser;
 
 use crate::consumer::HoaConsumer;
 use crate::lexer::Token::*;
 use crate::lexer::{
-    HoaLexer, LexerError, PositionedToken, Token, ALIAS_NAME, IDENTIFIER, INTEGER, STRING,
+    alias_name_token, identifier_token, integer_token, string_token, HoaLexer, LexerError,
+    PositionedToken, Token,
 };
 
 use crate::parser::expression_parser::{is_alias_expression_token, parse_alias_expression};
@@ -21,6 +21,7 @@ use std::slice::Iter;
 use std::{error, fmt};
 use ParserError::*;
 
+#[derive(Debug)]
 pub enum ParserError {
     MismatchingToken {
         expected: String,
@@ -52,17 +53,17 @@ pub struct HoaParser<'a, C: HoaConsumer> {
     /// the consumer which receives the automaton
     consumer: C,
     /// a lexer that tokenizes the input
-    lexer: HoaLexer<'a>,
+    lexer: HoaLexer,
     /// the actual input which is passed in when the parser is constructed. It also determines
     /// the lifetime of a parser.
     input: &'a [u8],
 }
 
-fn expect<'a>(
-    expected: Token<'a>,
-    possible_token: Option<&'a PositionedToken<'a>>,
+fn expect(
+    expected: Token,
+    possible_token: Option<&PositionedToken>,
     context: String,
-) -> Result<&'a PositionedToken<'a>, ParserError> {
+) -> Result<&PositionedToken, ParserError> {
     match possible_token {
         Some(actual) => {
             // println!("expecting {:#?}, getting {:#?}", expected, actual.token);
@@ -107,8 +108,8 @@ impl<'a> fmt::Display for ParserError {
     }
 }
 
-impl<'a> From<LexerError<'a>> for ParserError {
-    fn from(err: LexerError<'a>) -> Self {
+impl<'a> From<LexerError> for ParserError {
+    fn from(err: LexerError) -> Self {
         LexingError {
             message: err.to_string(),
         }
@@ -130,7 +131,7 @@ impl<'a, C: HoaConsumer> HoaParser<'a, C> {
 
         // todo hoa token extraction
         let _hoa = expect(TokenHoa, it.next(), "HOA header extraction".to_string())?;
-        let hoa_version = expect(IDENTIFIER, it.next(), "HOA version".to_string())?
+        let hoa_version = expect(identifier_token(), it.next(), "HOA version".to_string())?
             .token
             .unwap_str();
         self.consumer
@@ -172,18 +173,22 @@ impl<'a, C: HoaConsumer> HoaParser<'a, C> {
 
                             // there has to be at least one state so as above we expect an int, consume and unwrap it
                             start_states.push(
-                                expect(TokenInt(0), it.next(), "first initial state".to_string())?
-                                    .token
-                                    .unwrap_int(),
+                                expect(
+                                    integer_token(),
+                                    it.next(),
+                                    "first initial state".to_string(),
+                                )?
+                                .token
+                                .unwrap_int(),
                             );
 
                             // loop through any further integer tokens to obtain all start states
                             'extract_start_states: loop {
                                 match it.peek() {
-                                    Some(state) if state.token == INTEGER => {
+                                    Some(state) if state.token == integer_token() => {
                                         start_states.push(
                                             expect(
-                                                INTEGER,
+                                                integer_token(),
                                                 it.next(),
                                                 "subsequent initial states".to_string(),
                                             )?
@@ -200,9 +205,10 @@ impl<'a, C: HoaConsumer> HoaParser<'a, C> {
                         }
                         TokenAp => {
                             expect(TokenAp, it.next(), "ap header".to_string())?;
-                            let num_aps = expect(INTEGER, it.next(), "num_aps".to_string())?
-                                .token
-                                .unwrap_int();
+                            let num_aps =
+                                expect(integer_token(), it.next(), "num_aps".to_string())?
+                                    .token
+                                    .unwrap_int();
                             if num_aps < 1 {
                                 return Err(ZeroAtomicPropositions);
                             }
@@ -211,7 +217,7 @@ impl<'a, C: HoaConsumer> HoaParser<'a, C> {
                             let mut aps = Vec::new();
                             for _ in 0..num_aps {
                                 aps.push(String::from(
-                                    expect(STRING, it.next(), "ap extraction".to_string())?
+                                    expect(string_token(), it.next(), "ap extraction".to_string())?
                                         .token
                                         .unwap_str(),
                                 ));
@@ -223,14 +229,14 @@ impl<'a, C: HoaConsumer> HoaParser<'a, C> {
 
                             //extract alias name and label-expr
                             let alias_name = String::from(
-                                expect(ALIAS_NAME, it.next(), "alias_name".to_string())?
+                                expect(alias_name_token(), it.next(), "alias_name".to_string())?
                                     .token
                                     .unwap_str(),
                             );
 
-                            let alias_expr_tokens: Vec<Token> = it
+                            let alias_expr_tokens: Vec<&Token> = it
                                 .peeking_take_while(|token| is_alias_expression_token(&token.token))
-                                .map(|token| token.token)
+                                .map(|token| &token.token)
                                 .collect();
 
                             let alias_expr = parse_alias_expression(&alias_expr_tokens)?;
@@ -241,17 +247,17 @@ impl<'a, C: HoaConsumer> HoaParser<'a, C> {
                             expect(TokenAcceptance, it.next(), "acceptance header".to_string())?;
 
                             let num_acceptance_sets = expect(
-                                INTEGER,
+                                integer_token(),
                                 it.next(),
                                 "number of acceptance sets".to_string(),
                             )?
                             .token
                             .unwrap_int();
 
-                            let acceptance_expr_tokens: Vec<Token> = it
+                            let acceptance_expr_tokens: Vec<&Token> = it
                                 .peeking_take_while(|token| {
                                     vec![
-                                        INTEGER,
+                                        integer_token(),
                                         TokenAnd,
                                         TokenNot,
                                         TokenOr,
@@ -262,7 +268,7 @@ impl<'a, C: HoaConsumer> HoaParser<'a, C> {
                                     ]
                                     .contains(&token.token)
                                 })
-                                .map(|token| token.token)
+                                .map(|token| &token.token)
                                 .collect();
                         }
                         _ => {

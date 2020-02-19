@@ -1,21 +1,21 @@
 use Token::*;
 
 /// Annotates a Token with additional data, for now that is only its position in the source
-#[derive(Clone, Debug, Copy, PartialEq, Hash)]
-pub struct PositionedToken<'a> {
-    pub token: Token<'a>,
+#[derive(Clone, Debug, PartialEq, Hash)]
+pub struct PositionedToken {
+    pub token: Token,
     pub line: usize,
     pub col: usize,
 }
 
 /// A Token in the input is represented here. It can potentially hold relevant data like string.
-#[derive(Clone, Debug, Copy, Hash)]
-pub enum Token<'a> {
+#[derive(Clone, Debug, Hash)]
+pub enum Token {
     TokenInt(usize),
-    TokenIdent(&'a str),
-    TokenString(&'a str),
-    TokenHeaderName(&'a str),
-    TokenAliasName(&'a str),
+    TokenIdent(String),
+    TokenString(String),
+    TokenHeaderName(String),
+    TokenAliasName(String),
     TokenEof,
     TokenBody,
     TokenEnd,
@@ -44,11 +44,22 @@ pub enum Token<'a> {
     TokenFalse,
 }
 
-pub const INTEGER: Token<'static> = TokenInt(0);
-pub const IDENTIFIER: Token<'static> = TokenIdent("");
-pub const STRING: Token<'static> = TokenString("");
-pub const HEADER_NAME: Token<'static> = TokenHeaderName("");
-pub const ALIAS_NAME: Token<'static> = TokenAliasName("");
+// pub const INTEGER: Token = TokenInt(0);
+pub fn integer_token() -> Token {
+    TokenInt(0)
+}
+pub fn identifier_token() -> Token {
+    TokenIdent(String::from(""))
+}
+pub fn string_token() -> Token {
+    TokenString(String::from(""))
+}
+pub fn header_name_token() -> Token {
+    TokenHeaderName(String::from(""))
+}
+pub fn alias_name_token() -> Token {
+    TokenAliasName(String::from(""))
+}
 pub const BOOLEAN_COMBINATORS: [Token; 7] = [
     TokenAnd,
     TokenNot,
@@ -59,15 +70,15 @@ pub const BOOLEAN_COMBINATORS: [Token; 7] = [
     TokenFalse,
 ];
 
-impl<'a> PartialEq for Token<'a> {
+impl<'a> PartialEq for Token {
     fn eq(&self, other: &Self) -> bool {
         std::mem::discriminant(self) == std::mem::discriminant(other)
     }
 }
 
-impl<'a> Eq for Token<'a> {}
+impl<'a> Eq for Token {}
 
-impl<'a> Token<'a> {
+impl<'a> Token {
     pub fn unwrap_int(&self) -> usize {
         match self {
             TokenInt(int) => *int,
@@ -75,17 +86,17 @@ impl<'a> Token<'a> {
         }
     }
 
-    pub fn unwap_str(&self) -> &'a str {
+    pub fn unwap_str(&self) -> &String {
         match self {
-            TokenIdent(content) => *content,
-            TokenString(content) => *content,
-            TokenHeaderName(content) => *content,
-            TokenAliasName(content) => *content,
+            TokenIdent(content) => content,
+            TokenString(content) => content,
+            TokenHeaderName(content) => content,
+            TokenAliasName(content) => content,
             _ => panic!("expected token containing string"),
         }
     }
 
-    pub fn at(self, line: usize, col: usize) -> PositionedToken<'a> {
+    pub fn at(self, line: usize, col: usize) -> PositionedToken {
         PositionedToken {
             token: self,
             line,
@@ -94,7 +105,7 @@ impl<'a> Token<'a> {
     }
 }
 
-impl<'a> std::fmt::Display for Token<'a> {
+impl<'a> std::fmt::Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             TokenInt(ap) => write!(f, "{}", ap),
@@ -134,9 +145,9 @@ impl<'a> std::fmt::Display for Token<'a> {
     }
 }
 
-impl<'a> std::fmt::Display for PositionedToken<'a> {
+impl<'a> std::fmt::Display for PositionedToken {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self.token {
+        match &self.token {
             TokenInt(int) => write!(f, "INT({}) at {},{}", int, self.line, self.col),
             TokenIdent(ident) => write!(f, "IDENT({}) at {},{}", ident, self.line, self.col),
             TokenString(string) => write!(f, "STR({}) at {},{}", string, self.line, self.col),
@@ -179,12 +190,12 @@ mod tests {
 
     #[test]
     fn equality_token_test() {
-        assert_eq!(INTEGER, TokenInt(7));
+        assert_eq!(integer_token(), TokenInt(7));
     }
 
     #[test]
     fn simple_token_print_test() {
-        let tkn = TokenAliasName("hallO");
+        let tkn = TokenAliasName("hallO".into());
         println!("{}", tkn);
     }
 }

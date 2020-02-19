@@ -27,39 +27,28 @@ use std::num::ParseIntError;
 use crate::lexer::LexerError::*;
 
 #[derive(Debug)]
-pub enum LexerError<'a> {
+pub enum LexerError {
     ParseInputError {},
-    IntParseError {
-        line: usize,
-        col: usize,
-    },
-    MissingSymbol {
-        expected: u8,
-    },
-    UnrecognizedToken {
-        expected: Option<Token<'a>>,
-        last: u8,
-    },
-    PrematureEnd {
-        line: usize,
-        col: usize,
-    },
+    IntParseError { line: usize, col: usize },
+    MissingSymbol { expected: u8 },
+    UnrecognizedToken { expected: Option<Token>, last: u8 },
+    PrematureEnd { line: usize, col: usize },
 }
 
 #[derive(Clone, Debug)]
-pub struct HoaLexer<'a> {
+pub struct HoaLexer {
     line: usize,
     col: usize,
     curr: char,
-    known_headers: HashMap<&'static str, Token<'a>>,
+    known_headers: HashMap<&'static str, fn() -> Token>,
     input: String,
     lines: Vec<String>,
     is_eof: bool,
 }
 
-impl fmt::Display for LexerError<'_> {
+impl fmt::Display for LexerError {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        match *self {
+        match self {
             ParseInputError {} => write!(f, "could not parse input data"),
             IntParseError { line, col } => write!(
                 f,
@@ -80,20 +69,20 @@ impl fmt::Display for LexerError<'_> {
     }
 }
 
-impl<'a> HoaLexer<'a> {
-    fn build_known_headers() -> HashMap<&'static str, Token<'a>> {
-        let mut hm: HashMap<&'static str, Token<'a>> = HashMap::new();
-        hm.insert("HOA:", TokenHoa);
-        hm.insert("State:", TokenState);
-        hm.insert("States:", TokenStates);
-        hm.insert("Start:", TokenStart);
-        hm.insert("AP:", TokenAp);
-        hm.insert("Alias:", TokenAlias);
-        hm.insert("Acceptance", TokenAcceptance);
-        hm.insert("acc-name:", TokenAccname);
-        hm.insert("tool:", TokenTool);
-        hm.insert("name:", TokenName);
-        hm.insert("properties:", TokenProperties);
+impl HoaLexer {
+    fn build_known_headers() -> HashMap<&'static str, fn() -> Token> {
+        let mut hm: HashMap<&'static str, fn() -> Token> = HashMap::new();
+        hm.insert("HOA:", || TokenHoa);
+        hm.insert("State:", || TokenState);
+        hm.insert("States:", || TokenStates);
+        hm.insert("Start:", || TokenStart);
+        hm.insert("AP:", || TokenAp);
+        hm.insert("Alias:", || TokenAlias);
+        hm.insert("Acceptance", || TokenAcceptance);
+        hm.insert("acc-name:", || TokenAccname);
+        hm.insert("tool:", || TokenTool);
+        hm.insert("name:", || TokenName);
+        hm.insert("properties:", || TokenProperties);
         hm
     }
 
@@ -248,8 +237,10 @@ impl<'a> HoaLexer<'a> {
                                     }
                                 };
                             }
-                            tokens
-                                .push(TokenString(&self.input[start..(start + len)]).at(line, col));
+                            tokens.push(
+                                TokenString(String::from(&self.input[start..(start + len)]))
+                                    .at(line, col),
+                            );
                         }
 
                         // extract numbers
@@ -306,7 +297,8 @@ impl<'a> HoaLexer<'a> {
                             // advance by the number of peeked characters
                             advance_by(&mut it, buffer.len());
                             tokens.push(
-                                TokenAliasName(&self.input[start..(start + len)]).at(line, col),
+                                TokenAliasName(String::from(&self.input[start..(start + len)]))
+                                    .at(line, col),
                             );
                         }
 
@@ -339,12 +331,14 @@ impl<'a> HoaLexer<'a> {
                             if buffer.chars().last().unwrap() == ':' {
                                 match self.known_headers.get(buffer.as_str()) {
                                     Some(tokentype) => {
-                                        tokens.push(tokentype.at(line, col));
+                                        tokens.push(tokentype().at(line, col));
                                     }
                                     None => {
                                         tokens.push(
-                                            TokenHeaderName(&self.input[start..(start + len)])
-                                                .at(line, col),
+                                            TokenHeaderName(String::from(
+                                                &self.input[start..(start + len)],
+                                            ))
+                                            .at(line, col),
                                         );
                                     }
                                 }
@@ -355,7 +349,8 @@ impl<'a> HoaLexer<'a> {
                                     tokens.push(TokenFalse.at(line, col));
                                 } else {
                                     tokens.push(
-                                        TokenIdent(&self.input[start..(start + len)]).at(line, col),
+                                        TokenIdent(String::from(&self.input[start..(start + len)]))
+                                            .at(line, col),
                                     );
                                 }
                             }
@@ -419,15 +414,14 @@ impl<'a> HoaLexer<'a> {
     }
 }
 
-impl<'a> TryFrom<&[u8]> for HoaLexer<'a> {
-    type Error = LexerError<'a>;
+impl TryFrom<&[u8]> for HoaLexer {
+    type Error = LexerError;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
         let contents = match from_utf8(value) {
             Ok(txt) => txt,
             Err(_) => return Err(ParseInputError {}),
         };
-
         Ok(HoaLexer {
             line: 0,
             col: 0,

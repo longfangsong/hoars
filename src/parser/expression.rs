@@ -9,30 +9,24 @@ type StartStates = Vec<usize>;
 
 /// A boolean atom represents the pieces of which a BooleanExpression is made up of. It can be one
 /// of true (t), false (f), an integer value representing an atomic proposition or an alias name
-#[derive(Debug)]
-pub enum BooleanAtomAlias<'a> {
+#[derive(Debug, Eq, PartialEq)]
+pub enum BooleanAtomAlias {
     BooleanValue(bool),
     IntegerValue(usize),
-    AliasName(&'a str),
+    AliasName(String),
 }
 
 /// Boolean expressions are made up of boolean atoms that can be negated or combined with the
 /// junctor 'or' and 'and'
-#[derive(Debug)]
-pub enum BooleanExpressionAlias<'a> {
-    Atom(BooleanAtomAlias<'a>),
-    Negation(Box<BooleanExpressionAlias<'a>>),
-    Conjunction(
-        Box<BooleanExpressionAlias<'a>>,
-        Box<BooleanExpressionAlias<'a>>,
-    ),
-    Disjunction(
-        Box<BooleanExpressionAlias<'a>>,
-        Box<BooleanExpressionAlias<'a>>,
-    ),
+#[derive(Debug, Eq, PartialEq)]
+pub enum BooleanExpressionAlias {
+    Atom(BooleanAtomAlias),
+    Negation(Box<BooleanExpressionAlias>),
+    Conjunction(Box<BooleanExpressionAlias>, Box<BooleanExpressionAlias>),
+    Disjunction(Box<BooleanExpressionAlias>, Box<BooleanExpressionAlias>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 /// Represents an identifier for the acceptance component
 pub enum AcceptanceIdent {
     Fin(usize),
@@ -42,7 +36,7 @@ pub enum AcceptanceIdent {
 }
 
 /// Acceptance conditions are made up of boolean combinations of acceptance identifiers
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum AcceptanceCondition {
     Atom(AcceptanceIdent),
     Conjunction(Box<AcceptanceCondition>, Box<AcceptanceCondition>),
@@ -50,11 +44,35 @@ pub enum AcceptanceCondition {
     BooleanValue(bool),
 }
 
-impl<'a> Mul for BooleanExpressionAlias<'a> {
-    type Output = BooleanExpressionAlias<'a>;
+impl Mul for BooleanExpressionAlias {
+    type Output = BooleanExpressionAlias;
 
     fn mul(self, rhs: Self) -> Self::Output {
         self.and(rhs)
+    }
+}
+
+impl Mul<BooleanAtomAlias> for BooleanExpressionAlias {
+    type Output = BooleanExpressionAlias;
+
+    fn mul(self, rhs: BooleanAtomAlias) -> Self::Output {
+        self * BooleanExpressionAlias::Atom(rhs)
+    }
+}
+
+impl Mul for BooleanAtomAlias {
+    type Output = BooleanExpressionAlias;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        BooleanExpressionAlias::Atom(self) * BooleanExpressionAlias::Atom(rhs)
+    }
+}
+
+impl Mul<BooleanExpressionAlias> for BooleanAtomAlias {
+    type Output = BooleanExpressionAlias;
+
+    fn mul(self, rhs: BooleanExpressionAlias) -> Self::Output {
+        BooleanExpressionAlias::Atom(self) * rhs
     }
 }
 
@@ -66,11 +84,35 @@ impl Mul for AcceptanceCondition {
     }
 }
 
-impl<'a> Add for BooleanExpressionAlias<'a> {
-    type Output = BooleanExpressionAlias<'a>;
+impl Add for BooleanExpressionAlias {
+    type Output = BooleanExpressionAlias;
 
     fn add(self, rhs: Self) -> Self::Output {
         self.or(rhs)
+    }
+}
+
+impl Add<BooleanAtomAlias> for BooleanExpressionAlias {
+    type Output = BooleanExpressionAlias;
+
+    fn add(self, rhs: BooleanAtomAlias) -> Self::Output {
+        self + BooleanExpressionAlias::Atom(rhs)
+    }
+}
+
+impl Add for BooleanAtomAlias {
+    type Output = BooleanExpressionAlias;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        BooleanExpressionAlias::Atom(self) + rhs
+    }
+}
+
+impl Add<BooleanExpressionAlias> for BooleanAtomAlias {
+    type Output = BooleanExpressionAlias;
+
+    fn add(self, rhs: BooleanExpressionAlias) -> Self::Output {
+        BooleanExpressionAlias::Atom(self) + rhs
     }
 }
 
@@ -82,11 +124,19 @@ impl Add for AcceptanceCondition {
     }
 }
 
-impl<'a> Neg for BooleanExpressionAlias<'a> {
-    type Output = BooleanExpressionAlias<'a>;
+impl Not for BooleanExpressionAlias {
+    type Output = BooleanExpressionAlias;
 
-    fn neg(self) -> Self::Output {
+    fn not(self) -> Self::Output {
         self.not()
+    }
+}
+
+impl Not for BooleanAtomAlias {
+    type Output = BooleanExpressionAlias;
+
+    fn not(self) -> Self::Output {
+        BooleanExpressionAlias::Negation(Box::new(BooleanExpressionAlias::Atom(self)))
     }
 }
 
@@ -102,8 +152,8 @@ impl Not for AcceptanceIdent {
     }
 }
 
-impl<'a> From<BooleanAtomAlias<'a>> for BooleanExpressionAlias<'a> {
-    fn from(atom: BooleanAtomAlias<'a>) -> Self {
+impl From<BooleanAtomAlias> for BooleanExpressionAlias {
+    fn from(atom: BooleanAtomAlias) -> Self {
         Atom(atom)
     }
 }
@@ -114,34 +164,34 @@ impl From<AcceptanceIdent> for AcceptanceCondition {
     }
 }
 
-impl<'a> BooleanAtomAlias<'a> {
-    pub fn btrue() -> BooleanAtomAlias<'a> {
+impl<'a> BooleanAtomAlias {
+    pub fn btrue() -> BooleanAtomAlias {
         BooleanValue(true)
     }
 
-    pub fn bfalse() -> BooleanAtomAlias<'a> {
+    pub fn bfalse() -> BooleanAtomAlias {
         BooleanValue(false)
     }
 
-    pub fn bint(int: usize) -> BooleanAtomAlias<'a> {
+    pub fn bint(int: usize) -> BooleanAtomAlias {
         IntegerValue(int)
     }
 
-    pub fn balias(name: &'a str) -> BooleanAtomAlias<'a> {
+    pub fn balias(name: String) -> BooleanAtomAlias {
         AliasName(name)
     }
 }
 
-impl<'a> BooleanExpressionAlias<'a> {
-    pub fn and(self, other: BooleanExpressionAlias<'a>) -> BooleanExpressionAlias<'a> {
+impl BooleanExpressionAlias {
+    pub fn and(self, other: BooleanExpressionAlias) -> BooleanExpressionAlias {
         Conjunction(Box::new(self), Box::new(other))
     }
 
-    pub fn or(self, other: BooleanExpressionAlias<'a>) -> BooleanExpressionAlias<'a> {
+    pub fn or(self, other: BooleanExpressionAlias) -> BooleanExpressionAlias {
         Disjunction(Box::new(self), Box::new(other))
     }
 
-    pub fn not(self) -> BooleanExpressionAlias<'a> {
+    pub fn not(self) -> BooleanExpressionAlias {
         Negation(Box::new(self))
     }
 }
@@ -175,7 +225,7 @@ impl std::fmt::Display for AcceptanceCondition {
     }
 }
 
-impl<'a> std::fmt::Display for BooleanAtomAlias<'a> {
+impl std::fmt::Display for BooleanAtomAlias {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             BooleanValue(b) => match b {
@@ -188,7 +238,7 @@ impl<'a> std::fmt::Display for BooleanAtomAlias<'a> {
     }
 }
 
-impl<'a> std::fmt::Display for BooleanExpressionAlias<'a> {
+impl std::fmt::Display for BooleanExpressionAlias {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             Atom(atom) => write!(f, "{}", atom),
@@ -205,7 +255,7 @@ mod tests {
 
     #[test]
     fn alias_test() {
-        let a: BooleanExpressionAlias = BooleanAtomAlias::balias("asdf").into();
+        let a: BooleanExpressionAlias = BooleanAtomAlias::balias("asdf".into()).into();
         let t: BooleanExpressionAlias = BooleanAtomAlias::btrue().into();
 
         let be = a.not().or(t.not());
