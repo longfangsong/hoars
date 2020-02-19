@@ -1,4 +1,5 @@
 mod token;
+
 pub use token::PositionedToken;
 use token::Token::*;
 pub use token::*;
@@ -218,7 +219,7 @@ impl<'a> HoaLexer<'a> {
                                     return Err(UnrecognizedToken {
                                         expected: None,
                                         last: c,
-                                    })
+                                    });
                                 }
                                 _ => return Err(PrematureEnd { line, col }),
                             }
@@ -290,7 +291,6 @@ impl<'a> HoaLexer<'a> {
 
                             'extract_alias: loop {
                                 let pk = it.peek();
-                                println!("{:#?}", (pk.unwrap().0 as char));
                                 match pk {
                                     Some((c, _, _))
                                         if (c.is_ascii_alphanumeric()
@@ -467,6 +467,15 @@ mod tests {
         let mut hl = HoaLexer::try_from(contents.as_slice()).expect("shiat");
         let tokens = hl.tokenize();
         println!("{:#?}", tokens);
+    }
+
+    #[test]
+    fn real_automaton_as_bytes_test() {
+        let contents = b"HOA: v1\nStates: 2\nAlias: @a 0\nAlias: @ab 0 & !1\nStart: 0\nacc-name: Rabin 1\nAcceptance: 2 (Fin(0) & Inf(1))\nAP: 2 \"a\" \"b\"\n--BODY--\nState: 0 \"a U b\"   /* An example of named state */\n  [0 & !1] 0 {0}\n  [1] 1 {0}\nState: 1\n  [t] 1 {1}\n--END--\n\n";
+        let mut hl = HoaLexer::try_from(contents as &[u8]).expect("shit");
+        for token in hl.tokenize().expect("again shit") {
+            println!("{:#?}", token);
+        }
     }
 
     #[test]

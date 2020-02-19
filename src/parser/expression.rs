@@ -1,16 +1,16 @@
 use crate::lexer::Token;
 use std::convert::TryFrom;
 use std::fmt::{Debug, Error, Formatter};
-use std::ops::{Add, Mul, Neg};
-use BooleanAtom::*;
-use BooleanExpression::*;
+use std::ops::{Add, Mul, Neg, Not};
+use BooleanAtomAlias::*;
+use BooleanExpressionAlias::*;
 
 type StartStates = Vec<usize>;
 
 /// A boolean atom represents the pieces of which a BooleanExpression is made up of. It can be one
 /// of true (t), false (f), an integer value representing an atomic proposition or an alias name
 #[derive(Debug)]
-pub enum BooleanAtom<'a> {
+pub enum BooleanAtomAlias<'a> {
     BooleanValue(bool),
     IntegerValue(usize),
     AliasName(&'a str),
@@ -19,11 +19,17 @@ pub enum BooleanAtom<'a> {
 /// Boolean expressions are made up of boolean atoms that can be negated or combined with the
 /// junctor 'or' and 'and'
 #[derive(Debug)]
-pub enum BooleanExpression<'a> {
-    Atom(BooleanAtom<'a>),
-    Negation(Box<BooleanExpression<'a>>),
-    Conjunction(Box<BooleanExpression<'a>>, Box<BooleanExpression<'a>>),
-    Disjunction(Box<BooleanExpression<'a>>, Box<BooleanExpression<'a>>),
+pub enum BooleanExpressionAlias<'a> {
+    Atom(BooleanAtomAlias<'a>),
+    Negation(Box<BooleanExpressionAlias<'a>>),
+    Conjunction(
+        Box<BooleanExpressionAlias<'a>>,
+        Box<BooleanExpressionAlias<'a>>,
+    ),
+    Disjunction(
+        Box<BooleanExpressionAlias<'a>>,
+        Box<BooleanExpressionAlias<'a>>,
+    ),
 }
 
 #[derive(Debug)]
@@ -44,64 +50,98 @@ pub enum AcceptanceCondition {
     BooleanValue(bool),
 }
 
-impl<'a> Mul for BooleanExpression<'a> {
-    type Output = BooleanExpression<'a>;
+impl<'a> Mul for BooleanExpressionAlias<'a> {
+    type Output = BooleanExpressionAlias<'a>;
 
     fn mul(self, rhs: Self) -> Self::Output {
         self.and(rhs)
     }
 }
 
-impl<'a> Add for BooleanExpression<'a> {
-    type Output = BooleanExpression<'a>;
+impl Mul for AcceptanceCondition {
+    type Output = AcceptanceCondition;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        AcceptanceCondition::Conjunction(Box::new(self), Box::new(rhs))
+    }
+}
+
+impl<'a> Add for BooleanExpressionAlias<'a> {
+    type Output = BooleanExpressionAlias<'a>;
 
     fn add(self, rhs: Self) -> Self::Output {
         self.or(rhs)
     }
 }
 
-impl<'a> Neg for BooleanExpression<'a> {
-    type Output = BooleanExpression<'a>;
+impl Add for AcceptanceCondition {
+    type Output = AcceptanceCondition;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        AcceptanceCondition::Disjunction(Box::new(self), Box::new(rhs))
+    }
+}
+
+impl<'a> Neg for BooleanExpressionAlias<'a> {
+    type Output = BooleanExpressionAlias<'a>;
 
     fn neg(self) -> Self::Output {
         self.not()
     }
 }
 
-impl<'a> From<BooleanAtom<'a>> for BooleanExpression<'a> {
-    fn from(atom: BooleanAtom<'a>) -> Self {
+impl Not for AcceptanceIdent {
+    type Output = AcceptanceIdent;
+
+    fn not(self) -> Self::Output {
+        match self {
+            AcceptanceIdent::Fin(x) => AcceptanceIdent::FinNeg(x),
+            AcceptanceIdent::Inf(x) => AcceptanceIdent::InfNeg(x),
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl<'a> From<BooleanAtomAlias<'a>> for BooleanExpressionAlias<'a> {
+    fn from(atom: BooleanAtomAlias<'a>) -> Self {
         Atom(atom)
     }
 }
 
-impl<'a> BooleanAtom<'a> {
-    pub fn btrue() -> BooleanAtom<'a> {
+impl From<AcceptanceIdent> for AcceptanceCondition {
+    fn from(atom: AcceptanceIdent) -> Self {
+        AcceptanceCondition::Atom(atom)
+    }
+}
+
+impl<'a> BooleanAtomAlias<'a> {
+    pub fn btrue() -> BooleanAtomAlias<'a> {
         BooleanValue(true)
     }
 
-    pub fn bfalse() -> BooleanAtom<'a> {
+    pub fn bfalse() -> BooleanAtomAlias<'a> {
         BooleanValue(false)
     }
 
-    pub fn bint(int: usize) -> BooleanAtom<'a> {
+    pub fn bint(int: usize) -> BooleanAtomAlias<'a> {
         IntegerValue(int)
     }
 
-    pub fn balias(name: &'a str) -> BooleanAtom<'a> {
+    pub fn balias(name: &'a str) -> BooleanAtomAlias<'a> {
         AliasName(name)
     }
 }
 
-impl<'a> BooleanExpression<'a> {
-    pub fn and(self, other: BooleanExpression<'a>) -> BooleanExpression<'a> {
+impl<'a> BooleanExpressionAlias<'a> {
+    pub fn and(self, other: BooleanExpressionAlias<'a>) -> BooleanExpressionAlias<'a> {
         Conjunction(Box::new(self), Box::new(other))
     }
 
-    pub fn or(self, other: BooleanExpression<'a>) -> BooleanExpression<'a> {
+    pub fn or(self, other: BooleanExpressionAlias<'a>) -> BooleanExpressionAlias<'a> {
         Disjunction(Box::new(self), Box::new(other))
     }
 
-    pub fn not(self) -> BooleanExpression<'a> {
+    pub fn not(self) -> BooleanExpressionAlias<'a> {
         Negation(Box::new(self))
     }
 }
@@ -135,7 +175,7 @@ impl std::fmt::Display for AcceptanceCondition {
     }
 }
 
-impl<'a> std::fmt::Display for BooleanAtom<'a> {
+impl<'a> std::fmt::Display for BooleanAtomAlias<'a> {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             BooleanValue(b) => match b {
@@ -148,7 +188,7 @@ impl<'a> std::fmt::Display for BooleanAtom<'a> {
     }
 }
 
-impl<'a> std::fmt::Display for BooleanExpression<'a> {
+impl<'a> std::fmt::Display for BooleanExpressionAlias<'a> {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             Atom(atom) => write!(f, "{}", atom),
@@ -165,8 +205,8 @@ mod tests {
 
     #[test]
     fn alias_test() {
-        let a: BooleanExpression = BooleanAtom::balias("asdf").into();
-        let t: BooleanExpression = BooleanAtom::btrue().into();
+        let a: BooleanExpressionAlias = BooleanAtomAlias::balias("asdf").into();
+        let t: BooleanExpressionAlias = BooleanAtomAlias::btrue().into();
 
         let be = a.not().or(t.not());
         println!("{}", be);
@@ -174,8 +214,8 @@ mod tests {
 
     #[test]
     fn expression_methods_construction_test() {
-        let t: BooleanExpression = BooleanAtom::btrue().into();
-        let f: BooleanExpression = BooleanAtom::bfalse().into();
+        let t: BooleanExpressionAlias = BooleanAtomAlias::btrue().into();
+        let f: BooleanExpressionAlias = BooleanAtomAlias::bfalse().into();
 
         let be = t.not().and(f);
         println!("{}", be);

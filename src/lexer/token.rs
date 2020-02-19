@@ -49,12 +49,23 @@ pub const IDENTIFIER: Token<'static> = TokenIdent("");
 pub const STRING: Token<'static> = TokenString("");
 pub const HEADER_NAME: Token<'static> = TokenHeaderName("");
 pub const ALIAS_NAME: Token<'static> = TokenAliasName("");
+pub const BOOLEAN_COMBINATORS: [Token; 7] = [
+    TokenAnd,
+    TokenNot,
+    TokenOr,
+    TokenLparenth,
+    TokenRparenth,
+    TokenTrue,
+    TokenFalse,
+];
 
 impl<'a> PartialEq for Token<'a> {
     fn eq(&self, other: &Self) -> bool {
         std::mem::discriminant(self) == std::mem::discriminant(other)
     }
 }
+
+impl<'a> Eq for Token<'a> {}
 
 impl<'a> Token<'a> {
     pub fn unwrap_int(&self) -> usize {
@@ -165,6 +176,11 @@ impl<'a> std::fmt::Display for PositionedToken<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn equality_token_test() {
+        assert_eq!(INTEGER, TokenInt(7));
+    }
 
     #[test]
     fn simple_token_print_test() {
