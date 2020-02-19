@@ -78,7 +78,7 @@ impl HoaLexer {
         hm.insert("Start:", || TokenStart);
         hm.insert("AP:", || TokenAp);
         hm.insert("Alias:", || TokenAlias);
-        hm.insert("Acceptance", || TokenAcceptance);
+        hm.insert("Acceptance:", || TokenAcceptance);
         hm.insert("acc-name:", || TokenAccname);
         hm.insert("tool:", || TokenTool);
         hm.insert("name:", || TokenName);

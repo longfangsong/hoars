@@ -1,5 +1,8 @@
 use crate::lexer::Token::*;
-use crate::lexer::{alias_name_token, integer_token, Token, BOOLEAN_COMBINATORS};
+use crate::lexer::{
+    alias_name_token, header_name_token, identifier_token, integer_token, Token,
+    BOOLEAN_COMBINATORS,
+};
 use crate::parser::ParserError::*;
 use crate::parser::{
     AcceptanceCondition, AcceptanceIdent, BooleanAtomAlias, BooleanExpressionAlias, ParserError,
@@ -29,7 +32,8 @@ fn parse_expr_acceptance_conjunct(
     match token {
         Some(&TokenAnd) => {
             let (rhs, i) = parse_expr_acceptance(tokens, next_pos + 1)?;
-            Ok((node_atom * rhs, i))
+            let res = node_atom * rhs;
+            Ok((res, i))
         }
         _ => Ok((node_atom, next_pos)),
     }
@@ -121,7 +125,7 @@ fn parse_expr_acceptance_term(
                         TokenNot => match tokens.get(pos + 3) {
                             Some(TokenInt(set_identifier)) => Ok((
                                 Into::<AcceptanceCondition>::into(!ident_func(*set_identifier)),
-                                pos + 4,
+                                pos + 5,
                             )),
                             _ => Err(UnexpectedEnd {
                                 message:
@@ -182,14 +186,29 @@ fn parse_expr_acceptance(
     tokens: &Vec<&Token>,
     pos: usize,
 ) -> Result<(AcceptanceCondition, usize), ParserError> {
-    let (node_atom, next_pos) = parse_expr_acceptance_conjunct(tokens, pos)?;
-    let token = tokens.get(next_pos);
-    match token {
-        Some(TokenOr) => {
-            let (rhs, i) = parse_expr_acceptance(tokens, next_pos + 1)?;
-            Ok((node_atom + rhs, i))
+    match tokens.get(pos) {
+        Some(TokenLparenth) => {
+            let res = parse_expr_acceptance(tokens, pos + 1);
+            return if let Some(TokenRparenth) = tokens.get(tokens.len() - 1) {
+                res
+            } else {
+                Err(MissingToken {
+                    expected: "Closing parentheses".to_string(),
+                    context: "acceptance extraction".to_string(),
+                })
+            };
         }
-        _ => Ok((node_atom, next_pos)),
+        _ => {
+            let (node_atom, next_pos) = parse_expr_acceptance_conjunct(tokens, pos)?;
+            let token = tokens.get(next_pos);
+            match token {
+                Some(TokenOr) => {
+                    let (rhs, i) = parse_expr_acceptance(tokens, next_pos + 1)?;
+                    Ok((node_atom + rhs, i))
+                }
+                _ => Ok((node_atom, next_pos)),
+            }
+        }
     }
 }
 
@@ -206,6 +225,46 @@ pub fn parse_acceptance_expression(
 pub fn is_alias_expression_token(token: &Token) -> bool {
     BOOLEAN_COMBINATORS.to_vec().contains(&token)
         || vec![alias_name_token(), integer_token()].contains(&token)
+}
+
+pub fn is_acceptance_expression_token(token: &Token) -> bool {
+    vec![
+        TokenIdent("Fin".to_string()),
+        TokenIdent("Inf".to_string()),
+        TokenNot,
+        integer_token(),
+        TokenLparenth,
+        TokenRparenth,
+        TokenAnd,
+        TokenNot,
+    ]
+    .contains(token)
+}
+
+pub fn is_accname_token(token: &Token) -> bool {
+    vec![identifier_token(), integer_token(), TokenTrue, TokenFalse].contains(token)
+}
+
+pub fn is_header_token(token: &Token) -> bool {
+    vec![
+        TokenEof,
+        TokenBody,
+        TokenEnd,
+        TokenAbort,
+        TokenHoa,
+        TokenState,
+        TokenStates,
+        TokenStart,
+        TokenAp,
+        TokenAlias,
+        TokenAcceptance,
+        TokenAccname,
+        TokenTool,
+        TokenName,
+        TokenProperties,
+        header_name_token(),
+    ]
+    .contains(token)
 }
 
 #[cfg(test)]

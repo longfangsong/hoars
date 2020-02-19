@@ -7,6 +7,13 @@ use BooleanExpressionAlias::*;
 
 type StartStates = Vec<usize>;
 
+#[derive(Debug, Eq, PartialEq)]
+pub enum AccnameInfo {
+    IntegerValue(usize),
+    BooleanValue(bool),
+    StringValue(String),
+}
+
 /// A boolean atom represents the pieces of which a BooleanExpression is made up of. It can be one
 /// of true (t), false (f), an integer value representing an atomic proposition or an alias name
 #[derive(Debug, Eq, PartialEq)]

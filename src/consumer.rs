@@ -1,10 +1,11 @@
-use crate::parser::BooleanExpressionAlias;
+use crate::parser::{AcceptanceCondition, BooleanExpressionAlias};
 
 pub trait HoaConsumer {
     fn notify_header_start(&mut self, version: &String);
     fn set_name(&mut self, name: &String);
     fn set_aps(&mut self, aps: Vec<String>);
     fn set_number_of_states(&mut self, number: usize);
+    fn add_properties(&mut self, property_list: Vec<String>);
     // parameter is int_list which is typedefed to std::vector<unsigned int>
     fn add_start_states(&mut self, st_conj: Vec<usize>);
     // has second argument std::vector<IntOrString>
@@ -19,6 +20,12 @@ pub trait HoaConsumer {
     fn notify_end(&mut self);
     fn notify_warning(&self, warning: &String);
     fn add_alias(&mut self, alias_name: &String, alias_expr: &BooleanExpressionAlias);
+    fn set_acceptance_condition(
+        &mut self,
+        number_of_sets: usize,
+        acceptance_expr: &AcceptanceCondition,
+    );
+    fn set_tool(&mut self, tool_info: Vec<String>);
 }
 
 pub struct NopConsumer {}
@@ -31,6 +38,8 @@ impl HoaConsumer for NopConsumer {
     fn set_aps(&mut self, aps: Vec<String>) {}
 
     fn set_number_of_states(&mut self, number: usize) {}
+
+    fn add_properties(&mut self, property_list: Vec<String>) {}
 
     fn add_start_states(&mut self, st_conj: Vec<usize>) {}
 
@@ -51,4 +60,13 @@ impl HoaConsumer for NopConsumer {
     fn notify_warning(&self, warning: &String) {}
 
     fn add_alias(&mut self, alias_name: &String, alias_expr: &BooleanExpressionAlias) {}
+
+    fn set_acceptance_condition(
+        &mut self,
+        number_of_sets: usize,
+        acceptance_expr: &AcceptanceCondition,
+    ) {
+    }
+
+    fn set_tool(&mut self, tool_info: Vec<String>) {}
 }
