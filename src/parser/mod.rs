@@ -13,7 +13,7 @@ use crate::lexer::{
 
 use crate::parser::expression_parser::{
     is_acceptance_expression_token, is_accname_token, is_alias_expression_token, is_header_token,
-    parse_acceptance_expression, parse_alias_expression,
+    parse_acceptance_expression, parse_alias_expression, parse_state_conjunction,
 };
 use itertools::{Itertools, Position};
 use std::borrow::Cow;
@@ -138,42 +138,78 @@ impl<'a, C: HoaConsumer> HoaParser<'a, C> {
     fn handle_edges(
         &mut self,
         state_number: usize,
+        state_label_expr: Option<&BooleanExpressionAlias>,
         tokens: Vec<&Token>,
     ) -> Result<(), ParserError> {
-        let mut pos = 0usize;
-        println!("entering handle_edges");
-        for token in &tokens {
-            print!("{}", token);
+        if tokens.len() == 0 {
+            return Ok(());
         }
-        print!("\n");
 
+        let mut pos = 0usize;
+        let mut label_expr = state_label_expr;
+        let mut label_tokens = Vec::new();
+        let mut label_expression;
         if let Some(TokenLbracket) = tokens.get(pos) {
             pos += 1;
-            let mut label_tokens = Vec::new();
             loop {
                 let next_token = tokens.get(pos);
                 pos += 1;
                 if next_token.is_none() || Some(&&TokenRbracket) == next_token {
                     break;
                 }
-                label_tokens.push(next_token.unwrap());
+                label_tokens.push(*next_token.unwrap());
             }
-            println!("lbl: {:#?}", label_tokens);
+            label_expression = parse_alias_expression(&label_tokens)?;
+            label_expr = Some(&label_expression);
         }
-        println!("pos after label extraction {}", pos);
 
+        // extract the tokens that make up state-conj
         let mut conj_tokens = Vec::new();
         loop {
             let next_token = tokens.get(pos);
             if next_token.is_none() || Some(&&TokenLcurly) == next_token {
                 break;
             }
-            conj_tokens.push(*next_token.unwrap());
             pos += 1;
+            conj_tokens.push(*next_token.unwrap());
         }
-        println!("conj tokens: {:#?}", conj_tokens);
-        let ai = parse_alias_expression(&conj_tokens)?;
-        println!("{}", ai);
+        let state_conj = &parse_state_conjunction(&conj_tokens)?;
+
+        // extract the acc-sig if present
+        let mut acc_sig = None;
+        let mut acc_sig_tokens = Vec::new();
+        if let Some(TokenLcurly) = tokens.get(pos) {
+            pos += 1;
+            loop {
+                let next_token = tokens.get(pos);
+                pos += 1;
+                if next_token.is_none() || Some(&&TokenRcurly) == next_token {
+                    break;
+                }
+                acc_sig_tokens.push(next_token.unwrap().unwrap_int());
+            }
+            acc_sig = Some(&acc_sig_tokens);
+        }
+
+        if label_expr.is_some() {
+            // we have a labelled edge
+            self.consumer.add_edge_with_label(
+                state_number,
+                label_expr.unwrap(),
+                state_conj,
+                acc_sig,
+            );
+        } else {
+            // we have an implicit edge
+            self.consumer
+                .add_edge_implicit(state_number, state_conj, acc_sig);
+        }
+
+        self.handle_edges(
+            state_number,
+            state_label_expr,
+            tokens.iter().skip(pos).map(|token| *token).collect(),
+        );
 
         Ok(())
     }
@@ -182,21 +218,23 @@ impl<'a, C: HoaConsumer> HoaParser<'a, C> {
         let mut pos = 0usize;
 
         // extract state label (if present)
+        let mut label_expr = None;
+        let mut label_tokens = Vec::new();
+        let mut label_expression;
         if let Some(TokenLbracket) = tokens.get(pos) {
-            let mut label_tokens = Vec::new();
             pos += 1;
             loop {
                 let next_token = tokens.get(pos);
                 if next_token.is_none() || Some(&&TokenRbracket) == next_token {
                     break;
                 }
-                label_tokens.push(next_token.unwrap());
+                label_tokens.push(*next_token.unwrap());
                 pos += 1;
             }
-            println!("lbl: {:#?}", label_tokens);
+            label_expression = parse_alias_expression(&label_tokens)?;
+            label_expr = Some(&label_expression);
         }
 
-        println!("pos after label extraction {}", pos);
         // extract state number
         let state_number = match tokens.get(pos) {
             Some(&number_token) if *number_token == integer_token() => number_token.unwrap_int(),
@@ -215,19 +253,18 @@ impl<'a, C: HoaConsumer> HoaParser<'a, C> {
             }
         };
         pos += 1;
-        println!("state number: {}", state_number);
 
         let state_label = match tokens.get(pos) {
             Some(TokenString(label)) => {
                 pos += 1;
-                label.clone()
+                Some(label)
             }
-            _ => "".to_string(),
+            _ => None,
         };
-        println!("state label: {}, position after: {}", state_label, pos);
 
+        let mut acc_sig = None;
+        let mut acc_sig_tokens = Vec::new();
         if let Some(TokenLcurly) = tokens.get(pos) {
-            let mut acc_sig_tokens = Vec::new();
             pos += 1;
             loop {
                 let next_token = tokens.get(pos);
@@ -236,21 +273,25 @@ impl<'a, C: HoaConsumer> HoaParser<'a, C> {
                 }
                 acc_sig_tokens.push(next_token.unwrap().unwrap_int());
             }
-            println!("acc sig tokens {:#?}", acc_sig_tokens);
+            acc_sig = Some(&acc_sig_tokens);
         }
+
+        self.consumer
+            .add_state(state_number, state_label, label_expr, acc_sig);
 
         self.handle_edges(
             state_number,
+            label_expr,
             tokens.iter().map(|token| *token).skip(pos).collect(),
-        )
+        )?;
+
+        self.consumer.notify_end_of_state(state_number);
+
+        Ok(())
     }
 
     fn automaton(&mut self) -> Result<(), ParserError> {
         let tokens = self.lexer.tokenize()?;
-        for token in self.lexer.tokenize()? {
-            print!("{}", token.token);
-        }
-
         let mut it = tokens.iter().peekable();
 
         // todo hoa token extraction
@@ -380,7 +421,7 @@ impl<'a, C: HoaConsumer> HoaParser<'a, C> {
                             .token
                             .unwap_str();
 
-                            let mut extra_info_tokens: Vec<&Token> = it
+                            let extra_info_tokens: Vec<&Token> = it
                                 .peeking_take_while(|token| !is_header_token(&token.token))
                                 .map(|token| &token.token)
                                 .collect();
@@ -426,7 +467,6 @@ impl<'a, C: HoaConsumer> HoaParser<'a, C> {
                             it.peeking_take_while(|token| !is_header_token(&token.token));
                         }
                         TokenBody => {
-                            println!("tokenbody");
                             expect(TokenBody, it.next(), "body token")?;
                             break 'header_items;
                         }
@@ -466,12 +506,15 @@ impl<'a, C: HoaConsumer> HoaParser<'a, C> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::consumer::NopConsumer;
+    use crate::consumer::{NopConsumer, PrintConsumer};
 
     #[test]
     fn real_automaton_test() {
-        let contents = b"HOA: v1\nStates: 2\nAlias: @a 0\nAlias: @ab 0 & !1\nStart: 0\nacc-name: Rabin 1\nAcceptance: 2 (Fin(0) & Inf(1))\nAP: 2 \"a\" \"b\"\n--BODY--\nState: 0 \"a U b\"   /* An example of named state */\n  [0 & !1] 0 {0}\n  [1] 1 {0}\nState: 1\n  [t] 1 {1}\n--END--\n\n";
-        let mut hp = HoaParser::new(NopConsumer {}, contents as &[u8]);
+        let contents = b"HOA: v1\nStates: 2\nAlias: @a 0\nAlias: @ab 0 & !1\nStart: \
+        0\nacc-name: Rabin 1\nAcceptance: 2 (Fin(0) & Inf(1))\nAP: 2 \"a\" \"b\"\n--BODY--\nState: \
+        0 \"a U b\"   /* An example of named state */\n  [0 & !1] 0 {0}\n  [1] 1 {0}\nState: 1\n  \
+        [t] 1 {1}\n--END--\n\n";
+        let mut hp = HoaParser::new(PrintConsumer {}, contents as &[u8]);
 
         match hp.automaton() {
             Ok(_) => println!("hooray"),

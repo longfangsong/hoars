@@ -222,6 +222,51 @@ pub fn parse_acceptance_expression(
     Ok(parse_expr_acceptance(tokens, 0)?.0)
 }
 
+pub fn parse_state_conjunction(tokens: &Vec<&Token>) -> Result<Vec<usize>, ParserError> {
+    let mut conj_states = Vec::new();
+    let mut it = tokens.iter();
+    if let Some(TokenInt(first_state)) = it.next() {
+        conj_states.push(*first_state);
+    } else {
+        return Err(MissingToken {
+            expected: "integer".to_string(),
+            context: "state conjunction".to_string(),
+        });
+    }
+
+    loop {
+        match it.next() {
+            None => break,
+            Some(TokenAnd) => match it.next() {
+                Some(TokenInt(next_state)) => conj_states.push(*next_state),
+                None => {
+                    return Err(UnexpectedEnd {
+                        message: "in state conjunction a & has to \
+                    be followed by an integer"
+                            .to_string(),
+                    })
+                }
+                Some(token) => {
+                    return Err(MismatchingToken {
+                        expected: "integer".to_string(),
+                        actual: token.to_string(),
+                        context: "state conjunction".to_string(),
+                    })
+                }
+            },
+            Some(token) => {
+                return Err(MismatchingToken {
+                    expected: "&".to_string(),
+                    actual: token.to_string(),
+                    context: "state conjunction conjunct".to_string(),
+                })
+            }
+        }
+    }
+
+    Ok(conj_states)
+}
+
 pub fn is_alias_expression_token(token: &Token) -> bool {
     BOOLEAN_COMBINATORS.to_vec().contains(&token)
         || vec![alias_name_token(), integer_token()].contains(&token)
@@ -271,6 +316,21 @@ pub fn is_header_token(token: &Token) -> bool {
 mod tests {
     use super::*;
     use crate::parser::AcceptanceIdent::{Fin, InfNeg};
+
+    #[test]
+    fn state_conj() {
+        let input = vec![
+            &TokenInt(2),
+            &TokenAnd,
+            &TokenInt(0),
+            &TokenAnd,
+            &TokenInt(1),
+        ];
+        assert_eq!(
+            parse_state_conjunction(&input).expect("could not parse state conjunction"),
+            vec![2, 0, 1]
+        )
+    }
 
     #[test]
     fn parse_acceptance() {
