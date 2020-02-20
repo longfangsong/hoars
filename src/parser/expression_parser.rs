@@ -1,8 +1,5 @@
 use crate::lexer::Token::*;
-use crate::lexer::{
-    alias_name_token, header_name_token, identifier_token, integer_token, Token,
-    BOOLEAN_COMBINATORS,
-};
+use crate::lexer::{header_name_token, Token};
 use crate::parser::ParserError::*;
 use crate::parser::{
     AcceptanceCondition, AcceptanceIdent, BooleanAtomAlias, BooleanExpressionAlias, ParserError,
@@ -89,7 +86,7 @@ fn parse_expr_acceptance_term(
     tokens: &Vec<&Token>,
     pos: usize,
 ) -> Result<(AcceptanceCondition, usize), ParserError> {
-    if let Some(token) = tokens.get(pos) {
+    return if let Some(token) = tokens.get(pos) {
         match token {
             TokenIdent(ident) => {
                 let ident_func: fn(usize) -> AcceptanceIdent;
@@ -162,9 +159,13 @@ fn parse_expr_acceptance_term(
             _ => Err(UnexpectedEnd {
                 message: "Expected atom, not whatever we got".to_string(),
             }),
-        };
-    }
-    Ok((AcceptanceCondition::BooleanValue(true), 0))
+        }
+    } else {
+        Err(MissingToken {
+            expected: "Fin or Neg expression".to_string(),
+            context: "parse_expr_acceptance_term".to_string(),
+        })
+    };
 }
 
 fn parse_expr_alias(
@@ -265,29 +266,6 @@ pub fn parse_state_conjunction(tokens: &Vec<&Token>) -> Result<Vec<usize>, Parse
     }
 
     Ok(conj_states)
-}
-
-pub fn is_alias_expression_token(token: &Token) -> bool {
-    BOOLEAN_COMBINATORS.to_vec().contains(&token)
-        || vec![alias_name_token(), integer_token()].contains(&token)
-}
-
-pub fn is_acceptance_expression_token(token: &Token) -> bool {
-    vec![
-        TokenIdent("Fin".to_string()),
-        TokenIdent("Inf".to_string()),
-        TokenNot,
-        integer_token(),
-        TokenLparenth,
-        TokenRparenth,
-        TokenAnd,
-        TokenNot,
-    ]
-    .contains(token)
-}
-
-pub fn is_accname_token(token: &Token) -> bool {
-    vec![identifier_token(), integer_token(), TokenTrue, TokenFalse].contains(token)
 }
 
 pub fn is_header_token(token: &Token) -> bool {

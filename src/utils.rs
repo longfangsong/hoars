@@ -1,7 +1,10 @@
-use std::iter::Iterator;
 use itertools::MultiPeek;
+use std::iter::Iterator;
 
-pub fn peek_n<A: Copy, B: Copy, I: Iterator<Item=(A, B, B)>>(it: &mut MultiPeek<I>, n: usize) -> Option<Vec<A>> {
+pub fn peek_n<A: Copy, B: Copy, I: Iterator<Item = (A, B, B)>>(
+    it: &mut MultiPeek<I>,
+    n: usize,
+) -> Option<Vec<A>> {
     let mut collected = Vec::new();
     for _ in 0..n {
         match it.peek() {
@@ -13,7 +16,10 @@ pub fn peek_n<A: Copy, B: Copy, I: Iterator<Item=(A, B, B)>>(it: &mut MultiPeek<
     Some(collected)
 }
 
-pub fn take_n<A: Copy, B: Copy, I: Iterator<Item=(A, B, B)>>(it: &mut I, n: usize) -> Option<Vec<A>> {
+pub fn take_n<A: Copy, B: Copy, I: Iterator<Item = (A, B, B)>>(
+    it: &mut I,
+    n: usize,
+) -> Option<Vec<A>> {
     let mut collected = Vec::new();
     for _ in 0..n {
         match it.next() {
@@ -31,7 +37,9 @@ pub fn advance_by<I: Iterator>(it: &mut I, n: usize) {
 }
 
 mod tests {
+    #[allow(unused_imports)]
     use super::*;
+    #[allow(unused_imports)]
     use itertools::multipeek;
 
     #[test]

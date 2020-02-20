@@ -60,16 +60,6 @@ pub fn header_name_token() -> Token {
 pub fn alias_name_token() -> Token {
     TokenAliasName(String::from(""))
 }
-pub const BOOLEAN_COMBINATORS: [Token; 7] = [
-    TokenAnd,
-    TokenNot,
-    TokenOr,
-    TokenLparenth,
-    TokenRparenth,
-    TokenTrue,
-    TokenFalse,
-];
-
 impl<'a> PartialEq for Token {
     fn eq(&self, other: &Self) -> bool {
         std::mem::discriminant(self) == std::mem::discriminant(other)

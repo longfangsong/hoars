@@ -1,4 +1,4 @@
-use crate::parser::{AcceptanceCondition, BooleanExpressionAlias};
+use crate::parser::{AcceptanceCondition, AccnameInfo, BooleanExpressionAlias};
 
 pub trait HoaConsumer {
     fn notify_header_start(&mut self, version: &String);
@@ -9,7 +9,7 @@ pub trait HoaConsumer {
     // parameter is int_list which is typedefed to std::vector<unsigned int>
     fn add_start_states(&mut self, st_conj: Vec<usize>);
     // has second argument std::vector<IntOrString>
-    fn provide_acceptance_name(&mut self, name: &String);
+    fn provide_acceptance_name(&mut self, name: &String, extra_info: &Vec<AccnameInfo>);
     fn notify_body_start(&mut self);
     // additional argument label_expr::ptr is ignored
     fn add_state(
@@ -49,64 +49,64 @@ pub struct PrintConsumer {}
 pub struct NopConsumer {}
 
 impl HoaConsumer for NopConsumer {
-    fn notify_header_start(&mut self, version: &String) {}
+    fn notify_header_start(&mut self, _version: &String) {}
 
-    fn set_name(&mut self, name: &String) {}
+    fn set_name(&mut self, _name: &String) {}
 
-    fn set_aps(&mut self, aps: Vec<String>) {}
+    fn set_aps(&mut self, _aps: Vec<String>) {}
 
-    fn set_number_of_states(&mut self, number: usize) {}
+    fn set_number_of_states(&mut self, _number: usize) {}
 
-    fn add_properties(&mut self, property_list: Vec<String>) {}
+    fn add_properties(&mut self, _property_list: Vec<String>) {}
 
-    fn add_start_states(&mut self, st_conj: Vec<usize>) {}
+    fn add_start_states(&mut self, _st_conj: Vec<usize>) {}
 
-    fn provide_acceptance_name(&mut self, name: &String) {}
+    fn provide_acceptance_name(&mut self, _name: &String, _extra_info: &Vec<AccnameInfo>) {}
 
     fn notify_body_start(&mut self) {}
 
     fn add_state(
         &mut self,
-        id: usize,
-        info: Option<&String>,
-        label_expr: Option<&BooleanExpressionAlias>,
-        acc_sig: Option<&Vec<usize>>,
+        _id: usize,
+        _info: Option<&String>,
+        _label_expr: Option<&BooleanExpressionAlias>,
+        _acc_sig: Option<&Vec<usize>>,
     ) {
     }
 
     fn add_edge_implicit(
         &mut self,
-        sig: usize,
-        conj_sucs: &Vec<usize>,
-        acc_sig: Option<&Vec<usize>>,
+        _sig: usize,
+        _conj_sucs: &Vec<usize>,
+        _acc_sig: Option<&Vec<usize>>,
     ) {
     }
 
     fn add_edge_with_label(
         &mut self,
-        sid: usize,
-        label_expr: &BooleanExpressionAlias,
-        int_list: &Vec<usize>,
-        acc_sig: Option<&Vec<usize>>,
+        _sid: usize,
+        _label_expr: &BooleanExpressionAlias,
+        _int_list: &Vec<usize>,
+        _acc_sig: Option<&Vec<usize>>,
     ) {
     }
 
-    fn notify_end_of_state(&mut self, sid: usize) {}
+    fn notify_end_of_state(&mut self, _sid: usize) {}
 
     fn notify_end(&mut self) {}
 
-    fn notify_warning(&self, warning: &String) {}
+    fn notify_warning(&self, _warning: &String) {}
 
-    fn add_alias(&mut self, alias_name: &String, alias_expr: &BooleanExpressionAlias) {}
+    fn add_alias(&mut self, _alias_name: &String, _alias_expr: &BooleanExpressionAlias) {}
 
     fn set_acceptance_condition(
         &mut self,
-        number_of_sets: usize,
-        acceptance_expr: &AcceptanceCondition,
+        _number_of_sets: usize,
+        _acceptance_expr: &AcceptanceCondition,
     ) {
     }
 
-    fn set_tool(&mut self, tool_info: Vec<String>) {}
+    fn set_tool(&mut self, _tool_info: Vec<String>) {}
 }
 
 impl HoaConsumer for PrintConsumer {
@@ -146,8 +146,11 @@ impl HoaConsumer for PrintConsumer {
         println!("}} set");
     }
 
-    fn provide_acceptance_name(&mut self, name: &String) {
+    fn provide_acceptance_name(&mut self, name: &String, extra_info: &Vec<AccnameInfo>) {
         println!("set acceptance name {}", name);
+        for ei in extra_info {
+            println!("\textra info: {}", ei);
+        }
     }
 
     fn notify_body_start(&mut self) {
@@ -231,6 +234,7 @@ impl HoaConsumer for PrintConsumer {
 
     fn notify_warning(&self, warning: &String) {
         println!("---WARNING---");
+        println!("\n{}", warning);
     }
 
     fn add_alias(&mut self, alias_name: &String, alias_expr: &BooleanExpressionAlias) {

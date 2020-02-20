@@ -12,16 +12,14 @@ use crate::lexer::{
 };
 
 use crate::parser::expression_parser::{
-    is_acceptance_expression_token, is_accname_token, is_alias_expression_token, is_header_token,
-    parse_acceptance_expression, parse_alias_expression, parse_state_conjunction,
+    is_header_token, parse_acceptance_expression, parse_alias_expression, parse_state_conjunction,
 };
-use itertools::{Itertools, Position};
-use std::borrow::Cow;
-use std::convert::{TryFrom, TryInto};
-use std::fmt::{Display, Error, Formatter};
+use itertools::Itertools;
+use std::convert::TryFrom;
+use std::fmt;
+use std::fmt::Formatter;
 use std::iter::Peekable;
 use std::slice::Iter;
-use std::{error, fmt};
 use ParserError::*;
 
 #[derive(Debug)]
@@ -52,6 +50,7 @@ pub enum ParserError {
 }
 
 /// The structure holding all relevant information for parsing a HOA encoded automaton.
+#[allow(dead_code)]
 pub struct HoaParser<'a, C: HoaConsumer> {
     /// the consumer which receives the automaton
     consumer: C,
@@ -62,6 +61,7 @@ pub struct HoaParser<'a, C: HoaConsumer> {
     input: &'a [u8],
 }
 
+#[allow(dead_code)]
 fn expect<S: Into<String>>(
     expected: Token,
     possible_token: Option<&PositionedToken>,
@@ -86,14 +86,6 @@ fn expect<S: Into<String>>(
             })
         }
     }
-}
-
-fn is_state_token(token: &PositionedToken) -> bool {
-    token.token == TokenState
-}
-
-fn is_end_token(token: &PositionedToken) -> bool {
-    token.token == TokenEnd
 }
 
 impl<'a> fmt::Display for ParserError {
@@ -126,15 +118,25 @@ impl<'a> From<LexerError> for ParserError {
     }
 }
 
+fn is_state_token(token: &PositionedToken) -> bool {
+    token.token == TokenState
+}
+
+fn is_end_token(token: &PositionedToken) -> bool {
+    token.token == TokenEnd
+}
+
 impl<'a, C: HoaConsumer> HoaParser<'a, C> {
+    #[allow(dead_code)]
     fn new(consumer: C, input: &'a [u8]) -> Self {
         HoaParser {
             consumer,
-            input,
+            input: input,
             lexer: HoaLexer::try_from(input).ok().unwrap(),
         }
     }
 
+    #[allow(dead_code)]
     fn handle_edges(
         &mut self,
         state_number: usize,
@@ -148,7 +150,7 @@ impl<'a, C: HoaConsumer> HoaParser<'a, C> {
         let mut pos = 0usize;
         let mut label_expr = state_label_expr;
         let mut label_tokens = Vec::new();
-        let mut label_expression;
+        let label_expression;
         if let Some(TokenLbracket) = tokens.get(pos) {
             pos += 1;
             loop {
@@ -209,18 +211,19 @@ impl<'a, C: HoaConsumer> HoaParser<'a, C> {
             state_number,
             state_label_expr,
             tokens.iter().skip(pos).map(|token| *token).collect(),
-        );
+        )?;
 
         Ok(())
     }
 
+    #[allow(dead_code)]
     fn handle_state(&mut self, tokens: Vec<&Token>) -> Result<(), ParserError> {
         let mut pos = 0usize;
 
         // extract state label (if present)
         let mut label_expr = None;
         let mut label_tokens = Vec::new();
-        let mut label_expression;
+        let label_expression;
         if let Some(TokenLbracket) = tokens.get(pos) {
             pos += 1;
             loop {
@@ -290,9 +293,17 @@ impl<'a, C: HoaConsumer> HoaParser<'a, C> {
         Ok(())
     }
 
+    #[allow(dead_code)]
     fn automaton(&mut self) -> Result<(), ParserError> {
         let tokens = self.lexer.tokenize()?;
         let mut it = tokens.iter().peekable();
+
+        // extractor function
+        let header_info_extractor = |it: &mut Peekable<Iter<PositionedToken>>| {
+            it.peeking_take_while(|token| !is_header_token(&token.token))
+                .map(|token| token.token.unwap_str().clone())
+                .collect()
+        };
 
         // todo hoa token extraction
         let _hoa = expect(TokenHoa, it.next(), "HOA header extraction")?;
@@ -433,18 +444,16 @@ impl<'a, C: HoaConsumer> HoaParser<'a, C> {
                                     TokenInt(integer) => AccnameInfo::IntegerValue(*integer),
                                     TokenTrue => AccnameInfo::BooleanValue(true),
                                     TokenFalse => AccnameInfo::BooleanValue(false),
-                                    tkn => panic!(
+                                    _tkn => panic!(
                                         "should not be reached, expected ident, int, true or false"
                                     ),
                                 })
                                 .collect();
+                            self.consumer.provide_acceptance_name(acc_name, &extra_info);
                         }
                         TokenTool => {
                             expect(TokenTool, it.next(), "token tool")?;
-                            let tool_info: Vec<String> = it
-                                .peeking_take_while(|token| !is_header_token(&token.token))
-                                .map(|token| token.token.unwap_str().clone())
-                                .collect();
+                            let tool_info: Vec<String> = header_info_extractor(&mut it);
                             self.consumer.set_tool(tool_info);
                         }
                         TokenName => {
@@ -456,15 +465,14 @@ impl<'a, C: HoaConsumer> HoaParser<'a, C> {
                         }
                         TokenProperties => {
                             expect(TokenProperties, it.next(), "token properties")?;
-                            let properties_info: Vec<String> = it
-                                .peeking_take_while(|token| !is_header_token(&token.token))
-                                .map(|token| token.token.unwap_str().clone())
-                                .collect();
+                            let properties_info: Vec<String> = header_info_extractor(&mut it);
                             self.consumer.add_properties(properties_info);
                         }
                         ref hdr if header_name_token() == *hdr => {
                             expect(header_name_token(), it.next(), "misc header")?;
-                            it.peeking_take_while(|token| !is_header_token(&token.token));
+                            let _unused_info: Vec<_> = it
+                                .peeking_take_while(|token| !is_header_token(&token.token))
+                                .collect();
                         }
                         TokenBody => {
                             expect(TokenBody, it.next(), "body token")?;
@@ -506,7 +514,7 @@ impl<'a, C: HoaConsumer> HoaParser<'a, C> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::consumer::{NopConsumer, PrintConsumer};
+    use crate::consumer::PrintConsumer;
 
     #[test]
     fn real_automaton_test() {

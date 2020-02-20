@@ -9,20 +9,13 @@ extern crate itertools;
 use super::utils::*;
 
 use std::collections::HashMap;
-use std::fs;
-use std::fs::File;
-use std::io::Read;
-use std::iter::{once, FromIterator, Peekable};
-use std::str::{from_utf8, Utf8Error};
+use std::fmt;
+use std::iter::once;
+use std::str::from_utf8;
 use std::string::String;
-use std::{env, fmt};
 
-use self::itertools::{multipeek, MultiPeek};
-use itertools::Itertools;
 use std::convert::TryFrom;
-use std::error::Error;
 use std::fmt::Formatter;
-use std::num::ParseIntError;
 
 use crate::lexer::LexerError::*;
 
@@ -439,7 +432,9 @@ impl TryFrom<&[u8]> for HoaLexer {
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused_imports)]
     use super::*;
+    use std::fs;
 
     #[test]
     fn basic_token_test() {

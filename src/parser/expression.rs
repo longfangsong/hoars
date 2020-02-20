@@ -1,11 +1,7 @@
-use crate::lexer::Token;
-use std::convert::TryFrom;
-use std::fmt::{Debug, Error, Formatter};
-use std::ops::{Add, Mul, Neg, Not};
+use std::fmt::{Debug, Formatter};
+use std::ops::{Add, Mul, Not};
 use BooleanAtomAlias::*;
 use BooleanExpressionAlias::*;
-
-type StartStates = Vec<usize>;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum AccnameInfo {
@@ -200,6 +196,16 @@ impl BooleanExpressionAlias {
 
     pub fn not(self) -> BooleanExpressionAlias {
         Negation(Box::new(self))
+    }
+}
+
+impl std::fmt::Display for AccnameInfo {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            AccnameInfo::IntegerValue(integer) => write!(f, " {} ", integer),
+            AccnameInfo::BooleanValue(boolean) => write!(f, " {} ", boolean),
+            AccnameInfo::StringValue(string) => write!(f, " {} ", string),
+        }
     }
 }
 
