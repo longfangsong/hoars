@@ -3,7 +3,7 @@ use std::ops::{Add, Mul, Not};
 use BooleanAtomAlias::*;
 use BooleanExpressionAlias::*;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub enum AccnameInfo {
     IntegerValue(usize),
     BooleanValue(bool),
@@ -12,7 +12,7 @@ pub enum AccnameInfo {
 
 /// A boolean atom represents the pieces of which a BooleanExpression is made up of. It can be one
 /// of true (t), false (f), an integer value representing an atomic proposition or an alias name
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub enum BooleanAtomAlias {
     BooleanValue(bool),
     IntegerValue(usize),
@@ -21,7 +21,7 @@ pub enum BooleanAtomAlias {
 
 /// Boolean expressions are made up of boolean atoms that can be negated or combined with the
 /// junctor 'or' and 'and'
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub enum BooleanExpressionAlias {
     Atom(BooleanAtomAlias),
     Negation(Box<BooleanExpressionAlias>),
@@ -29,7 +29,7 @@ pub enum BooleanExpressionAlias {
     Disjunction(Box<BooleanExpressionAlias>, Box<BooleanExpressionAlias>),
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 /// Represents an identifier for the acceptance component
 pub enum AcceptanceIdent {
     Fin(usize),
@@ -39,7 +39,7 @@ pub enum AcceptanceIdent {
 }
 
 /// Acceptance conditions are made up of boolean combinations of acceptance identifiers
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub enum AcceptanceCondition {
     Atom(AcceptanceIdent),
     Conjunction(Box<AcceptanceCondition>, Box<AcceptanceCondition>),
@@ -196,6 +196,87 @@ impl BooleanExpressionAlias {
 
     pub fn not(self) -> BooleanExpressionAlias {
         Negation(Box::new(self))
+    }
+
+    pub fn count_and(&self) -> usize {
+        match self {
+            Atom(_) => 0,
+            Negation(next) => next.count_and(),
+            Conjunction(l, r) => 1 + l.count_and() + r.count_and(),
+            Disjunction(l, r) => l.count_and() + r.count_and(),
+        }
+    }
+
+    pub fn count_or(&self) -> usize {
+        match self {
+            Atom(_) => 0,
+            Negation(next) => next.count_or(),
+            Conjunction(l, r) => l.count_or() + r.count_or(),
+            Disjunction(l, r) => 1 + l.count_or() + r.count_or(),
+        }
+    }
+
+    pub fn depth(&self) -> usize {
+        match self {
+            Atom(_) => 0,
+            Negation(next) => next.depth(),
+            Conjunction(l, r) => 1 + l.depth() + r.depth(),
+            Disjunction(l, r) => 1 + l.depth() + r.depth(),
+        }
+    }
+
+    pub fn count_pos(&self) -> usize {
+        match self {
+            Atom(_) => 1,
+            Negation(neg) => neg.count_pos().saturating_sub(1),
+            Conjunction(l, r) => l.count_pos() + r.count_pos(),
+            Disjunction(l, r) => l.count_pos() + r.count_pos(),
+        }
+    }
+
+    pub fn get_atom(&self) -> Option<BooleanAtomAlias> {
+        match self {
+            Atom(a) => Some(a.clone()),
+            _ => None,
+        }
+    }
+
+    pub fn pos_atoms(&self) -> Vec<BooleanAtomAlias> {
+        let mut out = Vec::new();
+
+        match self {
+            Atom(a) => out.push(a.clone()),
+            Negation(_) => {}
+            Conjunction(l, r) => {
+                out.extend(l.pos_atoms());
+                out.extend(r.pos_atoms());
+            }
+            Disjunction(l, r) => {
+                out.extend(l.pos_atoms());
+                out.extend(r.pos_atoms());
+            }
+        }
+
+        out
+    }
+
+    pub fn atoms(&self) -> Vec<BooleanAtomAlias> {
+        let mut out = Vec::new();
+
+        match self {
+            Atom(a) => out.push(a.clone()),
+            Negation(not) => out.extend(not.atoms()),
+            Conjunction(l, r) => {
+                out.extend(l.atoms());
+                out.extend(r.atoms());
+            }
+            Disjunction(l, r) => {
+                out.extend(l.atoms());
+                out.extend(r.atoms());
+            }
+        }
+
+        out
     }
 }
 

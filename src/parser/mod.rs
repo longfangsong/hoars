@@ -51,9 +51,9 @@ pub enum ParserError {
 
 /// The structure holding all relevant information for parsing a HOA encoded automaton.
 #[allow(dead_code)]
-pub struct HoaParser<'a, C: HoaConsumer> {
+pub struct HoaParser<'a, 'c, C: HoaConsumer> {
     /// the consumer which receives the automaton
-    consumer: C,
+    consumer: &'c mut C,
     /// a lexer that tokenizes the input
     lexer: HoaLexer,
     /// the actual input which is passed in when the parser is constructed. It also determines
@@ -126,9 +126,9 @@ fn is_end_token(token: &PositionedToken) -> bool {
     token.token == TokenEnd
 }
 
-impl<'a, C: HoaConsumer> HoaParser<'a, C> {
+impl<'a, 'c, C: HoaConsumer> HoaParser<'a, 'c, C> {
     #[allow(dead_code)]
-    fn new(consumer: C, input: &'a [u8]) -> Self {
+    pub fn new(consumer: &'c mut C, input: &'a [u8]) -> Self {
         HoaParser {
             consumer,
             input: input,
@@ -294,7 +294,7 @@ impl<'a, C: HoaConsumer> HoaParser<'a, C> {
     }
 
     #[allow(dead_code)]
-    fn automaton(&mut self) -> Result<(), ParserError> {
+    pub fn automaton(&mut self) -> Result<(), ParserError> {
         let tokens = self.lexer.tokenize()?;
         let mut it = tokens.iter().peekable();
 
