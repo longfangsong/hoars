@@ -1,15 +1,15 @@
 use crate::parser::{AcceptanceCondition, AccnameInfo, BooleanExpressionAlias};
 
 pub trait HoaConsumer {
-    fn notify_header_start(&mut self, version: &String);
-    fn set_name(&mut self, name: &String);
+    fn notify_header_start(&mut self, version: &str);
+    fn set_name(&mut self, name: &str);
     fn set_aps(&mut self, aps: Vec<String>);
     fn set_number_of_states(&mut self, number: usize);
     fn add_properties(&mut self, property_list: Vec<String>);
     // parameter is int_list which is typedefed to std::vector<unsigned int>
     fn add_start_states(&mut self, st_conj: Vec<usize>);
     // has second argument std::vector<IntOrString>
-    fn provide_acceptance_name(&mut self, name: &String, extra_info: &Vec<AccnameInfo>);
+    fn provide_acceptance_name(&mut self, name: &str, extra_info: &[AccnameInfo]);
     fn notify_body_start(&mut self);
     // additional argument label_expr::ptr is ignored
     fn add_state(
@@ -19,24 +19,19 @@ pub trait HoaConsumer {
         label_expr: Option<&BooleanExpressionAlias>,
         acc_sig: Option<&Vec<usize>>,
     );
-    fn add_edge_implicit(
-        &mut self,
-        sig: usize,
-        conj_sucs: &Vec<usize>,
-        acc_sig: Option<&Vec<usize>>,
-    );
+    fn add_edge_implicit(&mut self, sig: usize, conj_sucs: &[usize], acc_sig: Option<&Vec<usize>>);
     // additional argument label_expr::ptr ignored
     fn add_edge_with_label(
         &mut self,
         sid: usize,
         label_expr: &BooleanExpressionAlias,
-        int_list: &Vec<usize>,
+        int_list: &[usize],
         acc_sig: Option<&Vec<usize>>,
     );
     fn notify_end_of_state(&mut self, sid: usize);
     fn notify_end(&mut self);
-    fn notify_warning(&self, warning: &String);
-    fn add_alias(&mut self, alias_name: &String, alias_expr: &BooleanExpressionAlias);
+    fn notify_warning(&self, warning: &str);
+    fn add_alias(&mut self, alias_name: &str, alias_expr: &BooleanExpressionAlias);
     fn set_acceptance_condition(
         &mut self,
         number_of_sets: usize,
@@ -49,9 +44,9 @@ pub struct PrintConsumer {}
 pub struct NopConsumer {}
 
 impl HoaConsumer for NopConsumer {
-    fn notify_header_start(&mut self, _version: &String) {}
+    fn notify_header_start(&mut self, _version: &str) {}
 
-    fn set_name(&mut self, _name: &String) {}
+    fn set_name(&mut self, _name: &str) {}
 
     fn set_aps(&mut self, _aps: Vec<String>) {}
 
@@ -61,7 +56,7 @@ impl HoaConsumer for NopConsumer {
 
     fn add_start_states(&mut self, _st_conj: Vec<usize>) {}
 
-    fn provide_acceptance_name(&mut self, _name: &String, _extra_info: &Vec<AccnameInfo>) {}
+    fn provide_acceptance_name(&mut self, _name: &str, _extra_info: &[AccnameInfo]) {}
 
     fn notify_body_start(&mut self) {}
 
@@ -77,7 +72,7 @@ impl HoaConsumer for NopConsumer {
     fn add_edge_implicit(
         &mut self,
         _sig: usize,
-        _conj_sucs: &Vec<usize>,
+        _conj_sucs: &[usize],
         _acc_sig: Option<&Vec<usize>>,
     ) {
     }
@@ -86,7 +81,7 @@ impl HoaConsumer for NopConsumer {
         &mut self,
         _sid: usize,
         _label_expr: &BooleanExpressionAlias,
-        _int_list: &Vec<usize>,
+        _int_list: &[usize],
         _acc_sig: Option<&Vec<usize>>,
     ) {
     }
@@ -95,9 +90,9 @@ impl HoaConsumer for NopConsumer {
 
     fn notify_end(&mut self) {}
 
-    fn notify_warning(&self, _warning: &String) {}
+    fn notify_warning(&self, _warning: &str) {}
 
-    fn add_alias(&mut self, _alias_name: &String, _alias_expr: &BooleanExpressionAlias) {}
+    fn add_alias(&mut self, _alias_name: &str, _alias_expr: &BooleanExpressionAlias) {}
 
     fn set_acceptance_condition(
         &mut self,
@@ -110,11 +105,11 @@ impl HoaConsumer for NopConsumer {
 }
 
 impl HoaConsumer for PrintConsumer {
-    fn notify_header_start(&mut self, version: &String) {
+    fn notify_header_start(&mut self, version: &str) {
         println!("notified of header start, version: {}", version);
     }
 
-    fn set_name(&mut self, name: &String) {
+    fn set_name(&mut self, name: &str) {
         println!("name was set to {}", name);
     }
 
@@ -146,7 +141,7 @@ impl HoaConsumer for PrintConsumer {
         println!("}} set");
     }
 
-    fn provide_acceptance_name(&mut self, name: &String, extra_info: &Vec<AccnameInfo>) {
+    fn provide_acceptance_name(&mut self, name: &str, extra_info: &[AccnameInfo]) {
         println!("set acceptance name {}", name);
         for ei in extra_info {
             println!("\textra info: {}", ei);
@@ -180,12 +175,7 @@ impl HoaConsumer for PrintConsumer {
         }
     }
 
-    fn add_edge_implicit(
-        &mut self,
-        sig: usize,
-        conj_sucs: &Vec<usize>,
-        acc_sig: Option<&Vec<usize>>,
-    ) {
+    fn add_edge_implicit(&mut self, sig: usize, conj_sucs: &[usize], acc_sig: Option<&Vec<usize>>) {
         println!("\tadding implicit edge for state {}", sig);
         print!("\t\twith conj_sucs [");
         for cs in conj_sucs {
@@ -205,7 +195,7 @@ impl HoaConsumer for PrintConsumer {
         &mut self,
         sid: usize,
         label_expr: &BooleanExpressionAlias,
-        int_list: &Vec<usize>,
+        int_list: &[usize],
         acc_sig: Option<&Vec<usize>>,
     ) {
         println!("\tadding labelled edge for state {}", sid);
@@ -232,12 +222,12 @@ impl HoaConsumer for PrintConsumer {
         println!("---end of body---");
     }
 
-    fn notify_warning(&self, warning: &String) {
+    fn notify_warning(&self, warning: &str) {
         println!("---WARNING---");
         println!("\n{}", warning);
     }
 
-    fn add_alias(&mut self, alias_name: &String, alias_expr: &BooleanExpressionAlias) {
+    fn add_alias(&mut self, alias_name: &str, alias_expr: &BooleanExpressionAlias) {
         println!(
             "adding alias @{} with expression {}",
             alias_name, alias_expr

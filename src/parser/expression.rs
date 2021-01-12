@@ -131,7 +131,7 @@ impl Not for BooleanExpressionAlias {
     type Output = BooleanExpressionAlias;
 
     fn not(self) -> Self::Output {
-        self.not()
+        self.negate()
     }
 }
 
@@ -194,7 +194,7 @@ impl BooleanExpressionAlias {
         Disjunction(Box::new(self), Box::new(other))
     }
 
-    pub fn not(self) -> BooleanExpressionAlias {
+    pub fn negate(self) -> BooleanExpressionAlias {
         Negation(Box::new(self))
     }
 
@@ -352,7 +352,7 @@ mod tests {
         let a: BooleanExpressionAlias = BooleanAtomAlias::balias("asdf".into()).into();
         let t: BooleanExpressionAlias = BooleanAtomAlias::btrue().into();
 
-        let be = a.not().or(t.not());
+        let be = a.negate().or(t.negate());
         println!("{}", be);
     }
 
@@ -361,7 +361,7 @@ mod tests {
         let t: BooleanExpressionAlias = BooleanAtomAlias::btrue().into();
         let f: BooleanExpressionAlias = BooleanAtomAlias::bfalse().into();
 
-        let be = t.not().and(f);
+        let be = t.negate().and(f);
         println!("{}", be);
     }
 

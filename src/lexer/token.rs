@@ -9,6 +9,7 @@ pub struct PositionedToken {
 }
 
 /// A Token in the input is represented here. It can potentially hold relevant data like string.
+#[allow(clippy::clippy::derive_hash_xor_eq)]
 #[derive(Clone, Debug, Hash)]
 pub enum Token {
     TokenInt(usize),

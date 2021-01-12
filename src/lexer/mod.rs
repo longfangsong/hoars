@@ -321,7 +321,7 @@ impl HoaLexer {
                             // advance by number of peeked chars
                             advance_by(&mut it, buffer.len());
                             // check if we have a header, i.e. last char is :
-                            if buffer.chars().last().unwrap() == ':' {
+                            if buffer.ends_with(':') {
                                 match self.known_headers.get(buffer.as_str()) {
                                     Some(tokentype) => {
                                         tokens.push(tokentype().at(line, col));
@@ -335,17 +335,15 @@ impl HoaLexer {
                                         );
                                     }
                                 }
+                            } else if buffer == *"t" {
+                                tokens.push(TokenTrue.at(line, col));
+                            } else if buffer == *"f" {
+                                tokens.push(TokenFalse.at(line, col));
                             } else {
-                                if buffer == "t".to_string() {
-                                    tokens.push(TokenTrue.at(line, col));
-                                } else if buffer == "f".to_string() {
-                                    tokens.push(TokenFalse.at(line, col));
-                                } else {
-                                    tokens.push(
-                                        TokenIdent(String::from(&self.input[start..(start + len)]))
-                                            .at(line, col),
-                                    );
-                                }
+                                tokens.push(
+                                    TokenIdent(String::from(&self.input[start..(start + len)]))
+                                        .at(line, col),
+                                );
                             }
                         }
 

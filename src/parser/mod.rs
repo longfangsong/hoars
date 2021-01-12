@@ -70,21 +70,19 @@ fn expect<S: Into<String>>(
     match possible_token {
         Some(actual) => {
             if expected != actual.token {
-                return Err(MismatchingToken {
+                Err(MismatchingToken {
                     expected: expected.to_string(),
                     actual: actual.token.to_string(),
                     context: context.into(),
-                });
+                })
             } else {
                 Ok(actual)
             }
         }
-        None => {
-            return Err(MissingToken {
-                expected: expected.to_string(),
-                context: context.into(),
-            })
-        }
+        None => Err(MissingToken {
+            expected: expected.to_string(),
+            context: context.into(),
+        }),
     }
 }
 
@@ -131,7 +129,7 @@ impl<'a, 'c, C: HoaConsumer> HoaParser<'a, 'c, C> {
     pub fn new(consumer: &'c mut C, input: &'a [u8]) -> Self {
         HoaParser {
             consumer,
-            input: input,
+            input,
             lexer: HoaLexer::try_from(input).ok().unwrap(),
         }
     }
@@ -143,7 +141,7 @@ impl<'a, 'c, C: HoaConsumer> HoaParser<'a, 'c, C> {
         state_label_expr: Option<&BooleanExpressionAlias>,
         tokens: Vec<&Token>,
     ) -> Result<(), ParserError> {
-        if tokens.len() == 0 {
+        if tokens.is_empty() {
             return Ok(());
         }
 
@@ -193,14 +191,10 @@ impl<'a, 'c, C: HoaConsumer> HoaParser<'a, 'c, C> {
             acc_sig = Some(&acc_sig_tokens);
         }
 
-        if label_expr.is_some() {
+        if let Some(le) = label_expr {
             // we have a labelled edge
-            self.consumer.add_edge_with_label(
-                state_number,
-                label_expr.unwrap(),
-                state_conj,
-                acc_sig,
-            );
+            self.consumer
+                .add_edge_with_label(state_number, le, state_conj, acc_sig);
         } else {
             // we have an implicit edge
             self.consumer
@@ -210,7 +204,7 @@ impl<'a, 'c, C: HoaConsumer> HoaParser<'a, 'c, C> {
         self.handle_edges(
             state_number,
             state_label_expr,
-            tokens.iter().skip(pos).map(|token| *token).collect(),
+            tokens.iter().skip(pos).copied().collect(),
         )?;
 
         Ok(())
@@ -285,7 +279,7 @@ impl<'a, 'c, C: HoaConsumer> HoaParser<'a, 'c, C> {
         self.handle_edges(
             state_number,
             label_expr,
-            tokens.iter().map(|token| *token).skip(pos).collect(),
+            tokens.iter().copied().skip(pos).collect(),
         )?;
 
         self.consumer.notify_end_of_state(state_number);

@@ -6,7 +6,7 @@ use crate::parser::{
 };
 
 fn parse_expr_alias_conjunct(
-    tokens: &Vec<&Token>,
+    tokens: &[&Token],
     pos: usize,
 ) -> Result<(BooleanExpressionAlias, usize), ParserError> {
     let (node_atom, next_pos) = parse_expr_alias_term(tokens, pos)?;
@@ -21,7 +21,7 @@ fn parse_expr_alias_conjunct(
 }
 
 fn parse_expr_acceptance_conjunct(
-    tokens: &Vec<&Token>,
+    tokens: &[&Token],
     pos: usize,
 ) -> Result<(AcceptanceCondition, usize), ParserError> {
     let (node_atom, next_pos) = parse_expr_acceptance_term(tokens, pos)?;
@@ -37,7 +37,7 @@ fn parse_expr_acceptance_conjunct(
 }
 
 fn parse_expr_alias_term(
-    tokens: &Vec<&Token>,
+    tokens: &[&Token],
     pos: usize,
 ) -> Result<(BooleanExpressionAlias, usize), ParserError> {
     if let Some(token) = tokens.get(pos) {
@@ -47,7 +47,7 @@ fn parse_expr_alias_term(
             TokenNot => {
                 // todo darf nicht weiter parsen wenn keine Klammern
                 parse_expr_alias_term(tokens, pos + 1)
-                    .and_then(|(node, next_pos)| Ok((node.not(), next_pos)))
+                    .map(|(node, next_pos)| (node.negate(), next_pos))
             }
             TokenLparenth => {
                 parse_expr_alias(tokens, pos + 1).and_then(|(node, next_pos)| {
@@ -83,7 +83,7 @@ fn parse_expr_alias_term(
 }
 
 fn parse_expr_acceptance_term(
-    tokens: &Vec<&Token>,
+    tokens: &[&Token],
     pos: usize,
 ) -> Result<(AcceptanceCondition, usize), ParserError> {
     return if let Some(token) = tokens.get(pos) {
@@ -169,7 +169,7 @@ fn parse_expr_acceptance_term(
 }
 
 fn parse_expr_alias(
-    tokens: &Vec<&Token>,
+    tokens: &[&Token],
     pos: usize,
 ) -> Result<(BooleanExpressionAlias, usize), ParserError> {
     let (node_atom, next_pos) = parse_expr_alias_conjunct(tokens, pos)?;
@@ -184,7 +184,7 @@ fn parse_expr_alias(
 }
 
 fn parse_expr_acceptance(
-    tokens: &Vec<&Token>,
+    tokens: &[&Token],
     pos: usize,
 ) -> Result<(AcceptanceCondition, usize), ParserError> {
     match tokens.get(pos) {
@@ -213,17 +213,15 @@ fn parse_expr_acceptance(
     }
 }
 
-pub fn parse_alias_expression(tokens: &Vec<&Token>) -> Result<BooleanExpressionAlias, ParserError> {
+pub fn parse_alias_expression(tokens: &[&Token]) -> Result<BooleanExpressionAlias, ParserError> {
     Ok(parse_expr_alias(tokens, 0)?.0)
 }
 
-pub fn parse_acceptance_expression(
-    tokens: &Vec<&Token>,
-) -> Result<AcceptanceCondition, ParserError> {
+pub fn parse_acceptance_expression(tokens: &[&Token]) -> Result<AcceptanceCondition, ParserError> {
     Ok(parse_expr_acceptance(tokens, 0)?.0)
 }
 
-pub fn parse_state_conjunction(tokens: &Vec<&Token>) -> Result<Vec<usize>, ParserError> {
+pub fn parse_state_conjunction(tokens: &[&Token]) -> Result<Vec<usize>, ParserError> {
     let mut conj_states = Vec::new();
     let mut it = tokens.iter();
     if let Some(TokenInt(first_state)) = it.next() {
