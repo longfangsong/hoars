@@ -30,13 +30,13 @@ pub enum LexerError {
 
 #[derive(Clone, Debug)]
 pub struct HoaLexer {
-    line: usize,
-    col: usize,
-    curr: char,
+    // line: usize,
+    // col: usize,
+    // curr: char,
     known_headers: HashMap<&'static str, fn() -> Token>,
     input: String,
     lines: Vec<String>,
-    is_eof: bool,
+    // is_eof: bool,
 }
 
 impl fmt::Display for LexerError {
@@ -257,7 +257,7 @@ impl HoaLexer {
                             // try to convert the buffer to a number
                             match number_string.parse::<usize>() {
                                 Ok(num) => {
-                                    tokens.push(TokenInt(num).at(line, col));
+                                    tokens.push(Int(num).at(line, col));
                                 }
                                 Err(_) => {
                                     return Err(IntParseError { line, col });
@@ -414,10 +414,10 @@ impl TryFrom<&[u8]> for HoaLexer {
             Err(_) => return Err(ParseInputError {}),
         };
         Ok(HoaLexer {
-            line: 0,
-            col: 0,
-            curr: '\t',
-            is_eof: false,
+            // line: 0,
+            // col: 0,
+            // curr: '\t',
+            // is_eof: false,
             lines: String::from(contents)
                 .lines()
                 .map(|s| s.to_string())

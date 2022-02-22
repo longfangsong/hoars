@@ -42,7 +42,7 @@ fn parse_expr_alias_term(
 ) -> Result<(BooleanExpressionAlias, usize), ParserError> {
     if let Some(token) = tokens.get(pos) {
         match token {
-            TokenInt(ap) => Ok((BooleanAtomAlias::bint(*ap).into(), pos + 1)),
+            Int(ap) => Ok((BooleanAtomAlias::bint(*ap).into(), pos + 1)),
             TokenAliasName(aname) => Ok((BooleanAtomAlias::balias(aname.clone()).into(), pos + 1)),
             TokenNot => {
                 // todo darf nicht weiter parsen wenn keine Klammern
@@ -120,7 +120,7 @@ fn parse_expr_acceptance_term(
                 return if let Some(next_symbol) = tokens.get(pos + 2) {
                     match next_symbol {
                         TokenNot => match tokens.get(pos + 3) {
-                            Some(TokenInt(set_identifier)) => Ok((
+                            Some(Int(set_identifier)) => Ok((
                                 Into::<AcceptanceCondition>::into(!ident_func(*set_identifier)),
                                 pos + 5,
                             )),
@@ -130,9 +130,7 @@ fn parse_expr_acceptance_term(
                                         .to_string(),
                             }),
                         },
-                        TokenInt(set_identifier) => {
-                            Ok((ident_func(*set_identifier).into(), pos + 4))
-                        }
+                        Int(set_identifier) => Ok((ident_func(*set_identifier).into(), pos + 4)),
                         _ => Err(UnexpectedEnd {
                             message: "Inf or Fin need to be followed by Negation symbol or INTEGER"
                                 .to_string(),
@@ -224,7 +222,7 @@ pub fn parse_acceptance_expression(tokens: &[&Token]) -> Result<AcceptanceCondit
 pub fn parse_state_conjunction(tokens: &[&Token]) -> Result<Vec<usize>, ParserError> {
     let mut conj_states = Vec::new();
     let mut it = tokens.iter();
-    if let Some(TokenInt(first_state)) = it.next() {
+    if let Some(Int(first_state)) = it.next() {
         conj_states.push(*first_state);
     } else {
         return Err(MissingToken {
@@ -237,7 +235,7 @@ pub fn parse_state_conjunction(tokens: &[&Token]) -> Result<Vec<usize>, ParserEr
         match it.next() {
             None => break,
             Some(TokenAnd) => match it.next() {
-                Some(TokenInt(next_state)) => conj_states.push(*next_state),
+                Some(Int(next_state)) => conj_states.push(*next_state),
                 None => {
                     return Err(UnexpectedEnd {
                         message: "in state conjunction a & has to \
@@ -295,13 +293,7 @@ mod tests {
 
     #[test]
     fn state_conj() {
-        let input = vec![
-            &TokenInt(2),
-            &TokenAnd,
-            &TokenInt(0),
-            &TokenAnd,
-            &TokenInt(1),
-        ];
+        let input = vec![&Int(2), &TokenAnd, &Int(0), &TokenAnd, &Int(1)];
         assert_eq!(
             parse_state_conjunction(&input).expect("could not parse state conjunction"),
             vec![2, 0, 1]
@@ -315,13 +307,13 @@ mod tests {
         let input = vec![
             &fintoken,
             &TokenLparenth,
-            &TokenInt(0),
+            &Int(0),
             &TokenRparenth,
             &TokenAnd,
             &inftoken,
             &TokenLparenth,
             &TokenNot,
-            &TokenInt(0),
+            &Int(0),
             &TokenRparenth,
         ];
 
@@ -357,9 +349,9 @@ mod tests {
             &TokenOr,
             &TokenNot,
             &TokenLparenth,
-            &TokenInt(238),
+            &Int(238),
             &TokenAnd,
-            &TokenInt(1),
+            &Int(1),
             &TokenRparenth,
         ];
         println!("{}", parse_expr_alias(&input, 0).ok().unwrap().0);
@@ -372,9 +364,9 @@ mod tests {
             &aliastoken,
             &TokenOr,
             &TokenNot,
-            &TokenInt(238),
+            &Int(238),
             &TokenAnd,
-            &TokenInt(1),
+            &Int(1),
         ];
         println!("{}", parse_expr_alias(&input, 0).ok().unwrap().0);
     }
@@ -386,9 +378,9 @@ mod tests {
             &aliastoken,
             &TokenOr,
             &TokenNot,
-            &TokenInt(238),
+            &Int(238),
             &TokenAnd,
-            &TokenInt(1),
+            &Int(1),
         ];
         println!("{}", parse_expr_alias(&input, 0).ok().unwrap().0);
     }

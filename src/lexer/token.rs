@@ -9,10 +9,10 @@ pub struct PositionedToken {
 }
 
 /// A Token in the input is represented here. It can potentially hold relevant data like string.
-#[allow(clippy::clippy::derive_hash_xor_eq)]
+#[allow(clippy::derive_hash_xor_eq)]
 #[derive(Clone, Debug, Hash)]
 pub enum Token {
-    TokenInt(usize),
+    Int(usize),
     TokenIdent(String),
     TokenString(String),
     TokenHeaderName(String),
@@ -47,7 +47,7 @@ pub enum Token {
 
 // pub const INTEGER: Token = TokenInt(0);
 pub fn integer_token() -> Token {
-    TokenInt(0)
+    Int(0)
 }
 pub fn identifier_token() -> Token {
     TokenIdent(String::from(""))
@@ -72,7 +72,7 @@ impl<'a> Eq for Token {}
 impl<'a> Token {
     pub fn unwrap_int(&self) -> usize {
         match self {
-            TokenInt(int) => *int,
+            Int(int) => *int,
             _ => panic!("expected TokenInt"),
         }
     }
@@ -99,7 +99,7 @@ impl<'a> Token {
 impl<'a> std::fmt::Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            TokenInt(ap) => write!(f, "{}", ap),
+            Int(ap) => write!(f, "{}", ap),
             TokenIdent(ident) => write!(f, "'{}'", ident),
             TokenString(string) => write!(f, "\"{}\"", string),
             TokenHeaderName(name) => write!(f, "HEADER({})", name),
@@ -139,7 +139,7 @@ impl<'a> std::fmt::Display for Token {
 impl<'a> std::fmt::Display for PositionedToken {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match &self.token {
-            TokenInt(int) => write!(f, "INT({}) at {},{}", int, self.line, self.col),
+            Int(int) => write!(f, "INT({}) at {},{}", int, self.line, self.col),
             TokenIdent(ident) => write!(f, "IDENT({}) at {},{}", ident, self.line, self.col),
             TokenString(string) => write!(f, "STR({}) at {},{}", string, self.line, self.col),
             TokenHeaderName(name) => write!(f, "HEADER({}) at {},{}", name, self.line, self.col),
@@ -181,7 +181,7 @@ mod tests {
 
     #[test]
     fn equality_token_test() {
-        assert_eq!(integer_token(), TokenInt(7));
+        assert_eq!(integer_token(), Int(7));
     }
 
     #[test]

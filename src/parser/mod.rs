@@ -167,7 +167,10 @@ impl<'a, 'c, C: HoaConsumer> HoaParser<'a, 'c, C> {
         let mut conj_tokens = Vec::new();
         loop {
             let next_token = tokens.get(pos);
-            if next_token.is_none() || Some(&&TokenLcurly) == next_token {
+            if next_token.is_none()
+                || Some(&&TokenLcurly) == next_token
+                || Some(&&TokenLbracket) == next_token
+            {
                 break;
             }
             pos += 1;
@@ -262,8 +265,8 @@ impl<'a, 'c, C: HoaConsumer> HoaParser<'a, 'c, C> {
         let mut acc_sig = None;
         let mut acc_sig_tokens = Vec::new();
         if let Some(TokenLcurly) = tokens.get(pos) {
-            pos += 1;
             loop {
+                pos += 1;
                 let next_token = tokens.get(pos);
                 if next_token.is_none() || next_token == Some(&&TokenRcurly) {
                     break;
@@ -271,6 +274,7 @@ impl<'a, 'c, C: HoaConsumer> HoaParser<'a, 'c, C> {
                 acc_sig_tokens.push(next_token.unwrap().unwrap_int());
             }
             acc_sig = Some(&acc_sig_tokens);
+            pos += 1;
         }
 
         self.consumer
@@ -319,7 +323,7 @@ impl<'a, 'c, C: HoaConsumer> HoaParser<'a, 'c, C> {
 
                             // expect next token to be integer, consume it and unwrap the contained integer
                             self.consumer.set_number_of_states(
-                                expect(TokenInt(0), it.next(), "state number extraction (int)")?
+                                expect(Int(0), it.next(), "state number extraction (int)")?
                                     .token
                                     .unwrap_int(),
                             );
@@ -435,7 +439,7 @@ impl<'a, 'c, C: HoaConsumer> HoaParser<'a, 'c, C> {
                                 .iter()
                                 .map(|token| match token {
                                     TokenIdent(ident) => AccnameInfo::StringValue(ident.clone()),
-                                    TokenInt(integer) => AccnameInfo::IntegerValue(*integer),
+                                    Int(integer) => AccnameInfo::IntegerValue(*integer),
                                     TokenTrue => AccnameInfo::BooleanValue(true),
                                     TokenFalse => AccnameInfo::BooleanValue(false),
                                     _tkn => panic!(
@@ -470,6 +474,7 @@ impl<'a, 'c, C: HoaConsumer> HoaParser<'a, 'c, C> {
                         }
                         TokenBody => {
                             expect(TokenBody, it.next(), "body token")?;
+                            self.consumer.notify_body_start();
                             break 'header_items;
                         }
                         _ => unreachable!(
@@ -500,6 +505,8 @@ impl<'a, 'c, C: HoaConsumer> HoaParser<'a, 'c, C> {
         expect(TokenEnd, it.next(), "end of automaton")?;
         expect(TokenEof, it.next(), "end of file")?;
 
+        self.consumer.notify_end();
+
         // finally return unit type as we have not encountered an error
         Ok(())
     }
@@ -516,7 +523,8 @@ mod tests {
         0\nacc-name: Rabin 1\nAcceptance: 2 (Fin(0) & Inf(1))\nAP: 2 \"a\" \"b\"\n--BODY--\nState: \
         0 \"a U b\"   /* An example of named state */\n  [0 & !1] 0 {0}\n  [1] 1 {0}\nState: 1\n  \
         [t] 1 {1}\n--END--\n\n";
-        let mut hp = HoaParser::new(PrintConsumer {}, contents as &[u8]);
+        let mut pc = PrintConsumer {};
+        let mut hp = HoaParser::new(&mut pc, contents as &[u8]);
 
         match hp.automaton() {
             Ok(_) => println!("hooray"),
