@@ -1,3 +1,4 @@
+mod body;
 mod format;
 mod header;
 mod lexer;
@@ -9,9 +10,10 @@ use ariadne::{Color, Fmt, Label, ReportKind, Source};
 use chumsky::prelude::*;
 pub use format::*;
 
-use chumsky::{prelude::Simple, primitive::just, Parser, Stream};
+use chumsky::{prelude::Simple, Parser, Stream};
 pub use format::{
-    AcceptanceCondition, AcceptanceInfo, AcceptanceName, AliasName, LabelExpression, Property,
+    AcceptanceCondition, AcceptanceInfo, AcceptanceName, AcceptanceSignature, AliasName,
+    LabelExpression, Property,
 };
 pub use header::HeaderItem;
 use lexer::Token;
@@ -30,21 +32,13 @@ impl HoaAutomaton {
     }
 }
 
-fn header_parser() -> impl Parser<Token, Vec<HeaderItem>, Error = Simple<Token>> {
-    let required_hoa = just(Token::Header("HOA".to_string()))
-        .ignore_then(just(Token::Identifier("v1".to_string())));
-
-    required_hoa
-        .ignore_then(header::item().repeated().at_least(1))
-        .then_ignore(end())
-}
-
 fn process(input: &str) -> Result<Vec<HeaderItem>, Vec<String>> {
     let (tokens, errs) = lexer::tokenizer().parse_recovery(input);
     if let Some(tokens) = tokens {
         let len = input.chars().count();
-        let (ast, parse_errs) =
-            header_parser().parse_recovery(Stream::from_iter(len..len + 1, tokens.into_iter()));
+        let (ast, parse_errs) = header::parser()
+            .then_ignore(end())
+            .parse_recovery(Stream::from_iter(len..len + 1, tokens.into_iter()));
 
         if parse_errs.is_empty() && ast.is_some() {
             let out = ast.unwrap();
@@ -146,210 +140,6 @@ fn make_report<I: Iterator<Item = Simple<String>>>(input: &str, errs: I) -> Vec<
 
 #[cfg(test)]
 mod tests {
-    use itertools::Itertools;
-
-    use super::*;
-
-    fn assert_header(input: &str, cmp: &[HeaderItem]) {
-        match process(&format!("HOA: v1 {}", input)) {
-            Ok(res) => assert_eq!(res, cmp),
-            Err(err) => {
-                eprintln!("{}", err.into_iter().join("\n"));
-                assert!(false)
-            }
-        }
-    }
-
-    fn assert_fails(input: &str) {
-        assert!(process(&format!("HOA: v1 {}", input)).is_err())
-    }
-
-    #[test]
-    fn property() {
-        assert_header(
-            r#"properties: trans-labels state-labels"#,
-            &[HeaderItem::Properties(vec![
-                Property::TransLabels,
-                Property::StateLabels,
-            ])],
-        );
-        assert_fails(r#"properties: trans-labels statelabels"#);
-        assert_fails(r#"properties: "#);
-    }
-
-    #[test]
-    fn tool_and_name() {
-        assert_header(
-            r#"
-                tool: "ltl-translate" "1.2-alpha"
-                name: "BA for GFa & GFb"
-            "#,
-            &[
-                HeaderItem::Tool("ltl-translate".to_string(), Some("1.2-alpha".to_string())),
-                HeaderItem::Name("BA for GFa & GFb".to_string()),
-            ],
-        );
-        assert_fails("tool: ltl-translate \"1.2-alpha\"");
-    }
-
-    #[test]
-    fn ariadne() {
-        assert_header(
-            "acc-name: Rabin 3",
-            &[HeaderItem::AcceptanceName(
-                AcceptanceName::Rabin,
-                vec![AcceptanceInfo::Int(3)],
-            )],
-        );
-        assert_header("Start: 0 & 7", &[HeaderItem::Start(vec![0, 7])]);
-    }
-
-    #[test]
-    fn aps() {
-        assert_header(
-            r#"AP: 3 "a" "proc@state" "a[x] >= 2""#,
-            &[HeaderItem::AP(vec![
-                "a".to_string(),
-                "proc@state".to_string(),
-                "a[x] >= 2".to_string(),
-            ])],
-        )
-    }
-
-    #[test]
-    fn alias() {
-        assert_header(
-            "Alias: @a 0",
-            &[HeaderItem::Alias(
-                "a".to_string(),
-                LabelExpression::Integer(0),
-            )],
-        );
-        assert_header(
-            "Alias: @a 0 & 1",
-            &[HeaderItem::Alias(
-                "a".to_string(),
-                LabelExpression::And(vec![
-                    LabelExpression::Integer(0),
-                    LabelExpression::Integer(1),
-                ]),
-            )],
-        );
-        assert_header(
-            "Alias: @a 0 & 1 | 2",
-            &[HeaderItem::Alias(
-                "a".to_string(),
-                LabelExpression::Or(vec![
-                    LabelExpression::And(vec![
-                        LabelExpression::Integer(0),
-                        LabelExpression::Integer(1),
-                    ]),
-                    LabelExpression::Integer(2),
-                ]),
-            )],
-        );
-        assert_header(
-            "Alias: @a 0 | 1 & 2",
-            &[HeaderItem::Alias(
-                "a".to_string(),
-                LabelExpression::Or(vec![
-                    LabelExpression::Integer(0),
-                    LabelExpression::And(vec![
-                        LabelExpression::Integer(1),
-                        LabelExpression::Integer(2),
-                    ]),
-                ]),
-            )],
-        );
-        assert_header(
-            "Alias: @a (0 | 1) & 2",
-            &[HeaderItem::Alias(
-                "a".to_string(),
-                LabelExpression::And(vec![
-                    LabelExpression::Or(vec![
-                        LabelExpression::Integer(0),
-                        LabelExpression::Integer(1),
-                    ]),
-                    LabelExpression::Integer(2),
-                ]),
-            )],
-        )
-    }
-
-    #[test]
-    fn multiple_headers() {}
-
-    // fn parse_header(input: &str) -> HeaderItem {
-    //     header_parser()
-    //         .parse(lexer().parse(input).unwrap())
-    //         .unwrap()
-    // }
-
-    // #[test]
-    // fn states() {
-    //     assert_eq!(parse_header("States: 7"), HeaderItem::States(7));
-    // }
-
-    // #[test]
-    // fn acceptance_name() {
-    //     assert_eq!(
-    //         parse_header("acc-name: Rabin 3"),
-    //         HeaderItem::AcceptanceName(AcceptanceName::Rabin, vec![AcceptanceInfo::Int(3)])
-    //     )
-    // }
-
-    // #[test]
-    // fn aps() {
-    //     parse_test(
-    //         "AP: 2 \"a\" \"bb\"",
-    //         HeaderItem::AP(vec!["a".to_string(), "bb".to_string()]),
-    //     );
-
-    //     assert!(parser().parse("AP: 1 \"a\" \"b\"").is_err());
-    //     assert!(parser().parse("AP: 3 \"a\" \"b\"").is_err());
-    // }
-
-    // #[test]
-    // fn acceptance() {
-    //     parse_test(
-    //         "Acceptance: 2 Fin(!0) & Inf(1)",
-    //         HeaderItem::Acceptance(
-    //             2,
-    //             AcceptanceCondition::And(vec![
-    //                 AcceptanceCondition::Fin((false, 0)),
-    //                 AcceptanceCondition::Inf((true, 1)),
-    //             ]),
-    //         ),
-    //     )
-    // }
-
-    // #[test]
-    // fn acc_name() {
-    //     parse_test(
-    //         "acc-name: Buchi",
-    //         HeaderItem::acceptance_name(AcceptanceName::Buchi),
-    //     );
-    //     fails("acc-name::");
-    //     fails("acc-nme:");
-    //     fails("acc-name: Buch");
-    // }
-
-    // #[test]
-    // fn aliases() {
-    //     parse_test(
-    //         "Alias: @a 0",
-    //         HeaderItem::alias("a", LabelExpression::int(0)),
-    //     );
-
-    //     parse_test(
-    //         "Alias: @c @ps|@a2",
-    //         HeaderItem::alias(
-    //             "c",
-    //             LabelExpression::or(LabelExpression::alias("ps"), LabelExpression::alias("a2")),
-    //         ),
-    //     )
-    // }
-
     // #[test]
     // fn real_test_1() {
     //     let contents = r#"HOA: v1

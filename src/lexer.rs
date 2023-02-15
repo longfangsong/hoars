@@ -77,8 +77,7 @@ pub fn tokenizer() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>
         .or(paren)
         .or(ident)
         .or(bool)
-        .or(alias)
-        .recover_with(skip_then_retry_until([]));
+        .or(alias);
 
     let comment = just("/*").then(take_until(just("*/"))).padded();
 

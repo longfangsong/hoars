@@ -6,6 +6,8 @@ pub type AliasName = String;
 
 pub type AcceptanceAtom = (bool, crate::Id);
 
+pub type AcceptanceSignature = Vec<crate::Id>;
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum LabelExpression {
     Boolean(bool),

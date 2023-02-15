@@ -1,6 +1,6 @@
 use chumsky::{prelude::*, select};
 
-use crate::{format::LabelExpression, AcceptanceInfo, Id, Token};
+use crate::{format::LabelExpression, AcceptanceInfo, Id, StateConjunction, Token, AcceptanceSignature};
 
 pub fn header() -> impl Parser<Token, String, Error = Simple<Token>> + Clone {
     select! {
@@ -32,6 +32,16 @@ pub fn identifier() -> impl Parser<Token, String, Error = Simple<Token>> + Clone
 
 pub fn alias_name() -> impl Parser<Token, String, Error = Simple<Token>> + Clone {
     select! { Token::Alias(aname) => aname.clone() }
+}
+
+pub fn state_conjunction() -> impl Parser<Token, StateConjunction, Error = Simple<Token>> {
+    integer().separated_by(just(Token::Op('&')))
+}
+
+pub fn acceptance_signature() -> impl Parser<Token, AcceptanceSignature, Error = Simple<Token>> {
+    integer()
+        .repeated()
+        .delimited_by(just(Token::Ctrl('{')), just(Token::Ctrl('}')))
 }
 
 impl LabelExpression {
