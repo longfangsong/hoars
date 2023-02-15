@@ -1,5 +1,9 @@
 use std::fmt::Display;
 
+use chumsky::prelude::Simple;
+
+use crate::Token;
+
 pub type Id = u32;
 
 pub type StateConjunction = Vec<Id>;
@@ -83,7 +87,7 @@ impl TryFrom<String> for AcceptanceName {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Property {
-    StateLabel,
+    StateLabels,
     TransLabels,
     ImplicitLabels,
     ExplicitLabels,
@@ -101,6 +105,34 @@ pub enum Property {
     Terminal,
     Tight,
     Colored,
+}
+
+impl TryFrom<String> for Property {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        match value.as_str() {
+            "state-labels" => Ok(Property::StateLabels),
+            "trans-labels" => Ok(Property::TransLabels),
+            "implicit-labels" => Ok(Property::ImplicitLabels),
+            "explicit-labels" => Ok(Property::ExplicitLabels),
+            "state-acc" => Ok(Property::StateAcceptance),
+            "trans-acc" => Ok(Property::TransitionAcceptance),
+            "univ-branch" => Ok(Property::UniversalBranching),
+            "no-univ-branch" => Ok(Property::NoUniversalBranching),
+            "deterministic" => Ok(Property::Deterministic),
+            "complete" => Ok(Property::Complete),
+            "unambiguous" => Ok(Property::Unambiguous),
+            "stutter-invariant" => Ok(Property::StutterInvariant),
+            "weak" => Ok(Property::Weak),
+            "very-weak" => Ok(Property::VeryWeak),
+            "inherently-weak" => Ok(Property::InherentlyWeak),
+            "terminatl" => Ok(Property::Terminal),
+            "tight" => Ok(Property::Tight),
+            "colored" => Ok(Property::Colored),
+            unknown => Err(format!("{} is not a valid property", unknown)),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -132,15 +164,5 @@ pub struct HoaAutomaton {
 impl HoaAutomaton {
     pub fn new((version, headers): (String, Vec<HeaderItem>)) -> Self {
         Self { version, headers }
-    }
-
-    #[cfg(test)]
-    pub fn assert_single_header(&self, header: HeaderItem) {
-        assert!(self.headers.eq(&vec![header]));
-    }
-
-    #[cfg(test)]
-    pub fn assert_headers(&self, header: Vec<HeaderItem>) {
-        assert!(self.headers.eq(&header));
     }
 }

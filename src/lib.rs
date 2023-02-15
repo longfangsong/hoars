@@ -14,7 +14,7 @@ use chumsky::{
 };
 use format::{
     AcceptanceCondition, AcceptanceInfo, AcceptanceName, AliasName, HeaderItem, HoaAutomaton,
-    LabelExpression,
+    LabelExpression, Property,
 };
 
 pub type Span = std::ops::Range<usize>;
@@ -206,7 +206,34 @@ fn single_header_parser() -> impl Parser<Token, HeaderItem, Error = Simple<Token
         .then(label_expression)
         .map(|(aname, expression)| HeaderItem::Alias(aname, expression));
 
-    states.or(acceptance_name).or(start).or(aps).or(alias)
+    let name = just(header("name"))
+        .ignore_then(string)
+        .map(|s| HeaderItem::Name(s.clone()));
+
+    let tool = just(header("tool"))
+        .ignore_then(string)
+        .then(string.or_not())
+        .map(|(tool, version)| HeaderItem::Tool(tool, version));
+
+    let properties = just(header("properties"))
+        .ignore_then(
+            ident
+                .try_map(|p, span| {
+                    Property::try_from(p).map_err(|err| Simple::custom(span, err.clone()))
+                })
+                .repeated()
+                .at_least(1),
+        )
+        .map(HeaderItem::Properties);
+
+    states
+        .or(acceptance_name)
+        .or(start)
+        .or(aps)
+        .or(alias)
+        .or(name)
+        .or(tool)
+        .or(properties)
 }
 
 fn header_parser() -> impl Parser<Token, Vec<HeaderItem>, Error = Simple<Token>> {
@@ -328,7 +355,7 @@ mod tests {
 
     use super::*;
 
-    fn run_header(input: &str, cmp: &[HeaderItem]) {
+    fn assert_header(input: &str, cmp: &[HeaderItem]) {
         match process(&format!("HOA: v1 {}", input)) {
             Ok(res) => assert_eq!(res, cmp),
             Err(err) => {
@@ -338,21 +365,53 @@ mod tests {
         }
     }
 
+    fn assert_fails(input: &str) {
+        assert!(process(&format!("HOA: v1 {}", input)).is_err())
+    }
+
+    #[test]
+    fn property() {
+        assert_header(
+            r#"properties: trans-labels state-labels"#,
+            &[HeaderItem::Properties(vec![
+                Property::TransLabels,
+                Property::StateLabels,
+            ])],
+        );
+        assert_fails(r#"properties: trans-labels statelabels"#);
+        assert_fails(r#"properties: "#);
+    }
+
+    #[test]
+    fn tool_and_name() {
+        assert_header(
+            r#"
+                tool: "ltl-translate" "1.2-alpha"
+                name: "BA for GFa & GFb"
+            "#,
+            &[
+                HeaderItem::Tool("ltl-translate".to_string(), Some("1.2-alpha".to_string())),
+                HeaderItem::Name("BA for GFa & GFb".to_string()),
+            ],
+        );
+        assert_fails("tool: ltl-translate \"1.2-alpha\"");
+    }
+
     #[test]
     fn ariadne() {
-        run_header(
+        assert_header(
             "acc-name: Rabin 3",
             &[HeaderItem::AcceptanceName(
                 AcceptanceName::Rabin,
                 vec![AcceptanceInfo::Int(3)],
             )],
         );
-        run_header("Start: 0 & 7", &[HeaderItem::Start(vec![0, 7])]);
+        assert_header("Start: 0 & 7", &[HeaderItem::Start(vec![0, 7])]);
     }
 
     #[test]
     fn aps() {
-        run_header(
+        assert_header(
             r#"AP: 3 "a" "proc@state" "a[x] >= 2""#,
             &[HeaderItem::AP(vec![
                 "a".to_string(),
@@ -364,14 +423,14 @@ mod tests {
 
     #[test]
     fn alias() {
-        run_header(
+        assert_header(
             "Alias: @a 0",
             &[HeaderItem::Alias(
                 "a".to_string(),
                 LabelExpression::Integer(0),
             )],
         );
-        run_header(
+        assert_header(
             "Alias: @a 0 & 1",
             &[HeaderItem::Alias(
                 "a".to_string(),
@@ -381,7 +440,7 @@ mod tests {
                 ]),
             )],
         );
-        run_header(
+        assert_header(
             "Alias: @a 0 & 1 | 2",
             &[HeaderItem::Alias(
                 "a".to_string(),
@@ -394,7 +453,7 @@ mod tests {
                 ]),
             )],
         );
-        run_header(
+        assert_header(
             "Alias: @a 0 | 1 & 2",
             &[HeaderItem::Alias(
                 "a".to_string(),
@@ -407,7 +466,7 @@ mod tests {
                 ]),
             )],
         );
-        run_header(
+        assert_header(
             "Alias: @a (0 | 1) & 2",
             &[HeaderItem::Alias(
                 "a".to_string(),
