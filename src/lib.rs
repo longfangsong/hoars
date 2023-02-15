@@ -1,251 +1,46 @@
 mod format;
+mod header;
+mod lexer;
+mod value;
 
-use std::{fmt::Display, hash::Hash};
+use ariadne::{Color, Fmt, Label, ReportKind, Source};
 
-use ariadne::{Color, Fmt, Label, Report, ReportKind, Source};
 #[allow(unused_imports)]
 use chumsky::prelude::*;
+pub use format::*;
 
-use chumsky::{
-    prelude::Simple,
-    primitive::{filter, just},
-    text::{self, Character, TextParser},
-    Parser, Stream,
+use chumsky::{prelude::Simple, primitive::just, Parser, Stream};
+pub use format::{
+    AcceptanceCondition, AcceptanceInfo, AcceptanceName, AliasName, LabelExpression, Property,
 };
-use format::{
-    AcceptanceCondition, AcceptanceInfo, AcceptanceName, AliasName, HeaderItem, HoaAutomaton,
-    LabelExpression, Property,
-};
+pub use header::HeaderItem;
+use lexer::Token;
 
-pub type Span = std::ops::Range<usize>;
+pub type Id = u32;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-enum Token {
-    Null,
-    Bool(bool),
-    Int(String),
-    Text(String),
-    Identifier(String),
-    Alias(String),
-    Header(String),
-    Op(char),
-    Ctrl(char),
-    Fin,
-    Inf,
+#[derive(Debug)]
+pub struct HoaAutomaton {
+    version: String,
+    headers: Vec<HeaderItem>,
 }
 
-impl Display for Token {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Token::Null => write!(f, "null"),
-            Token::Bool(b) => write!(f, "{}", b),
-            Token::Int(n) => write!(f, "{}", n),
-            Token::Text(txt) => write!(f, "{}", txt),
-            Token::Identifier(id) => write!(f, "{}", id),
-            Token::Alias(alias) => write!(f, "@{}", alias),
-            Token::Header(hdr) => write!(f, "{}:", hdr),
-            Token::Op(o) => write!(f, "{}", o),
-            Token::Ctrl(c) => write!(f, "{}", c),
-            Token::Fin => write!(f, "Fin"),
-            Token::Inf => write!(f, "Inf"),
-        }
+impl HoaAutomaton {
+    pub fn new((version, headers): (String, Vec<HeaderItem>)) -> Self {
+        Self { version, headers }
     }
 }
 
-fn header<I: Display>(name: I) -> Token {
-    Token::Header(name.to_string())
-}
-
-fn lexer() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
-    let int = text::int(10).map(Token::Int);
-
-    let str_ = just('"')
-        .ignore_then(filter(|c| *c != '"').repeated())
-        .then_ignore(just('"'))
-        .collect::<String>()
-        .map(Token::Text);
-
-    let bool = one_of("tf").try_map(|s, span| match s {
-        't' => Ok(Token::Bool(true)),
-        'f' => Ok(Token::Bool(false)),
-        _ => unreachable!(),
-    });
-
-    let op = one_of("!|&").map(Token::Op);
-
-    let paren = one_of(r#"(){}[]"#).map(Token::Ctrl);
-
-    let raw_ident = filter(|c: &char| c.is_ascii_alphabetic() || *c == '_')
-        .chain(filter(|c: &char| c.is_ascii_alphanumeric() || *c == '_' || *c == '-').repeated())
-        .collect::<String>();
-
-    let ident = raw_ident.map(|ident: String| match ident.as_str() {
-        "Fin" => Token::Fin,
-        "Inf" => Token::Inf,
-        _ => Token::Identifier(ident),
-    });
-
-    let alias = just('@').ignore_then(raw_ident).map(Token::Alias);
-
-    let header = ident
-        .then_ignore(just(':'))
-        .map(|header_name| Token::Header(header_name.to_string()));
-
-    let token = int
-        .or(header)
-        .or(str_)
-        .or(op)
-        .or(paren)
-        .or(ident)
-        .or(bool)
-        .or(alias)
-        .recover_with(skip_then_retry_until([]));
-
-    let comment = just("/*").then(take_until(just("*/"))).padded();
-
-    token
-        .map_with_span(|tok, span| (tok, span))
-        .padded_by(comment.repeated())
-        .padded()
-        .repeated()
-}
-
-fn single_header_parser() -> impl Parser<Token, HeaderItem, Error = Simple<Token>> {
-    let int = select! {
-        Token::Int(n) => n.parse().unwrap()
-    };
-    let boolean = select! {
-        Token::Bool(b) => b,
-    };
-    let ident = select! { Token::Identifier(ident) => ident.clone() };
-    let string = select! { Token::Text(txt) => txt.clone() };
-    let alias_name = select! { Token::Alias(aname) => aname.clone() };
-
-    let acceptance_info = select! {
-        Token::Identifier(ident) => AcceptanceInfo::Identifier(ident),
-        Token::Int(n) => AcceptanceInfo::Int(n.parse().unwrap()),
-    };
-
-    let states = just(header("States"))
-        .ignore_then(int)
-        .map(HeaderItem::States);
-
-    let acceptance_name = just(header("acc-name"))
-        .ignore_then(ident)
-        .try_map(|identifier, span| {
-            AcceptanceName::try_from(identifier).map_err(|e| Simple::custom(span, e))
-        })
-        .then(acceptance_info.repeated())
-        .map(|(name, info)| HeaderItem::AcceptanceName(name, info));
-
-    let start = just(header("Start"))
-        .ignore_then(int.separated_by(just(Token::Op('&'))))
-        .map(HeaderItem::Start);
-
-    let aps = just(header("AP"))
-        .ignore_then(int)
-        .then(string.repeated())
-        .try_map(|(num, prop_labels), span| {
-            if (num as usize) == prop_labels.len() {
-                Ok(HeaderItem::AP(prop_labels))
-            } else {
-                Err(Simple::custom(
-                    span,
-                    format!("Expected {} aps but got {}", num, prop_labels.len()),
-                ))
-            }
-        });
-
-    let label_expression = recursive(|label_expression| {
-        let value = boolean
-            .map(|b| LabelExpression::Boolean(b))
-            .or(int.map(|n| LabelExpression::Integer(n)))
-            .or(alias_name.map(|aname| LabelExpression::Alias(aname)));
-
-        let atom =
-            value.or(label_expression.delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')'))));
-
-        let unary = just(Token::Op('!'))
-            .or_not()
-            .then(atom)
-            .map(|(negated, expr)| {
-                if negated.is_some() {
-                    LabelExpression::Not(Box::new(expr))
-                } else {
-                    expr
-                }
-            });
-
-        let conjunction = unary
-            .clone()
-            .separated_by(just(Token::Op('&')))
-            .map(|conjuncts| {
-                if conjuncts.len() > 1 {
-                    LabelExpression::And(conjuncts)
-                } else {
-                    conjuncts.first().unwrap().clone()
-                }
-            });
-
-        let disjunction = conjunction
-            .clone()
-            .separated_by(just(Token::Op('|')))
-            .map(|disjuncts| {
-                if disjuncts.len() > 1 {
-                    LabelExpression::Or(disjuncts)
-                } else {
-                    disjuncts.first().unwrap().clone()
-                }
-            });
-
-        disjunction
-    });
-
-    let alias = just(header("Alias"))
-        .ignore_then(alias_name)
-        .then(label_expression)
-        .map(|(aname, expression)| HeaderItem::Alias(aname, expression));
-
-    let name = just(header("name"))
-        .ignore_then(string)
-        .map(|s| HeaderItem::Name(s.clone()));
-
-    let tool = just(header("tool"))
-        .ignore_then(string)
-        .then(string.or_not())
-        .map(|(tool, version)| HeaderItem::Tool(tool, version));
-
-    let properties = just(header("properties"))
-        .ignore_then(
-            ident
-                .try_map(|p, span| {
-                    Property::try_from(p).map_err(|err| Simple::custom(span, err.clone()))
-                })
-                .repeated()
-                .at_least(1),
-        )
-        .map(HeaderItem::Properties);
-
-    states
-        .or(acceptance_name)
-        .or(start)
-        .or(aps)
-        .or(alias)
-        .or(name)
-        .or(tool)
-        .or(properties)
-}
-
 fn header_parser() -> impl Parser<Token, Vec<HeaderItem>, Error = Simple<Token>> {
-    let required_hoa = just(header("HOA")).ignore_then(just(Token::Identifier("v1".to_string())));
+    let required_hoa = just(Token::Header("HOA".to_string()))
+        .ignore_then(just(Token::Identifier("v1".to_string())));
 
     required_hoa
-        .ignore_then(single_header_parser().repeated().at_least(1))
+        .ignore_then(header::item().repeated().at_least(1))
         .then_ignore(end())
 }
 
 fn process(input: &str) -> Result<Vec<HeaderItem>, Vec<String>> {
-    let (tokens, errs) = lexer().parse_recovery(input);
+    let (tokens, errs) = lexer::tokenizer().parse_recovery(input);
     if let Some(tokens) = tokens {
         let len = input.chars().count();
         let (ast, parse_errs) =
