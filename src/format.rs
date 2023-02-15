@@ -8,14 +8,14 @@ pub type AtomicProposition = String;
 
 pub type AliasName = String;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum LabelExpression {
     Boolean(bool),
     Integer(u32),
     Alias(AliasName),
     Not(Box<LabelExpression>),
-    And(Box<LabelExpression>, Box<LabelExpression>),
-    Or(Box<LabelExpression>, Box<LabelExpression>),
+    And(Vec<LabelExpression>),
+    Or(Vec<LabelExpression>),
 }
 
 impl LabelExpression {
@@ -27,12 +27,6 @@ impl LabelExpression {
         Self::Alias(name.to_string())
     }
 
-    pub fn or(lhs: Self, rhs: Self) -> Self {
-        Self::Or(Box::new(lhs), Box::new(rhs))
-    }
-    pub fn and(lhs: Self, rhs: Self) -> Self {
-        Self::And(Box::new(lhs), Box::new(rhs))
-    }
     pub fn not(expr: Self) -> Self {
         Self::Not(Box::new(expr))
     }
@@ -48,8 +42,8 @@ pub type AcceptanceAtom = (bool, Id);
 pub enum AcceptanceCondition {
     Fin(AcceptanceAtom),
     Inf(AcceptanceAtom),
-    And(Box<AcceptanceCondition>, Box<AcceptanceCondition>),
-    Or(Box<AcceptanceCondition>, Box<AcceptanceCondition>),
+    And(Vec<AcceptanceCondition>),
+    Or(Vec<AcceptanceCondition>),
     Boolean(bool),
 }
 
@@ -65,6 +59,26 @@ pub enum AcceptanceName {
     Parity,
     All,
     None,
+}
+
+impl TryFrom<String> for AcceptanceName {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        match value.as_str() {
+            "Buchi" => Ok(AcceptanceName::Buchi),
+            "generalized-Buchi" => Ok(AcceptanceName::GeneralizedBuchi),
+            "co-Buchi" => Ok(AcceptanceName::CoBuchi),
+            "generalized-co-Buchi" => Ok(AcceptanceName::GeneralizedCoBuchi),
+            "Streett" => Ok(AcceptanceName::Streett),
+            "Rabin" => Ok(AcceptanceName::Rabin),
+            "generalized-Rabin" => Ok(AcceptanceName::GeneralizedRabin),
+            "parity" => Ok(AcceptanceName::Parity),
+            "all" => Ok(AcceptanceName::All),
+            "none" => Ok(AcceptanceName::None),
+            val => Err(format!("Unknown acceptance type: {}", val)),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -90,27 +104,23 @@ pub enum Property {
 }
 
 #[derive(Debug, PartialEq, Eq)]
+pub enum AcceptanceInfo {
+    Int(Id),
+    Identifier(String),
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub enum HeaderItem {
     States(Id),
     Start(StateConjunction),
     AP(Vec<AtomicProposition>),
     Alias(AliasName, LabelExpression),
-    Acceptance(AcceptanceCondition),
-    AcceptanceName(AcceptanceName),
+    Acceptance(Id, AcceptanceCondition),
+    AcceptanceName(AcceptanceName, Vec<AcceptanceInfo>),
     // Correspond to tool name and optional version number
     Tool(String, Option<String>),
     Name(String),
     Properties(Vec<Property>),
-}
-
-impl HeaderItem {
-    pub fn alias<I: Display>(name: I, expr: LabelExpression) -> Self {
-        Self::Alias(name.to_string(), expr)
-    }
-
-    pub fn acceptance_name(name: AcceptanceName) -> Self {
-        Self::AcceptanceName(name)
-    }
 }
 
 #[derive(Debug)]
