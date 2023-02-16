@@ -1,5 +1,6 @@
 [package]
 name = "hoars"
+license = "GPL-3.0-or-later"
 description = "A library for dealing with the HOA (Hanoi Omega Automata) file format."
 homepage = "https://github.com/leonbohn/hoars/"
 repository = "https://github.com/leonbohn/hoars/"
