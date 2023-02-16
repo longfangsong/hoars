@@ -16,6 +16,7 @@ pub use format::{
     LabelExpression, Property,
 };
 pub use header::HeaderItem;
+use itertools::Itertools;
 use lexer::Token;
 
 pub type Id = u32;
@@ -32,34 +33,7 @@ impl HoaAutomaton {
     }
 }
 
-fn process(input: &str) -> Result<Vec<HeaderItem>, Vec<String>> {
-    let (tokens, errs) = lexer::tokenizer().parse_recovery(input);
-    if let Some(tokens) = tokens {
-        let len = input.chars().count();
-        let (ast, parse_errs) = header::parser()
-            .then_ignore(end())
-            .parse_recovery(Stream::from_iter(len..len + 1, tokens.into_iter()));
-
-        if parse_errs.is_empty() && ast.is_some() {
-            let out = ast.unwrap();
-            Ok(out)
-        } else {
-            Err(make_report(
-                input,
-                errs.into_iter()
-                    .map(|err| err.map(|c| c.to_string()))
-                    .chain(parse_errs.into_iter().map(|err| err.map(|c| c.to_string()))),
-            ))
-        }
-    } else {
-        Err(make_report(
-            input,
-            errs.into_iter().map(|err| err.map(|c| c.to_string())),
-        ))
-    }
-}
-
-fn make_report<I: Iterator<Item = Simple<String>>>(input: &str, errs: I) -> Vec<String> {
+fn build_error_report<I: Iterator<Item = Simple<String>>>(input: &str, errs: I) -> String {
     errs.into_iter()
         .map(|e| {
             let report = ariadne::Report::build(ReportKind::Error, (), e.span().start);
@@ -135,7 +109,11 @@ fn make_report<I: Iterator<Item = Simple<String>>>(input: &str, errs: I) -> Vec<
                 .unwrap_or_else(|_| "Could not parse error report")
                 .to_string()
         })
-        .collect()
+        .join("\n")
+}
+
+fn print_error_report<I: Iterator<Item = Simple<String>>>(input: &str, errs: I) {
+    eprintln!("{}", build_error_report(input, errs))
 }
 
 #[cfg(test)]

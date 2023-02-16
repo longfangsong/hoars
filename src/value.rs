@@ -1,6 +1,8 @@
 use chumsky::{prelude::*, select};
 
-use crate::{format::LabelExpression, AcceptanceInfo, Id, StateConjunction, Token, AcceptanceSignature};
+use crate::{
+    format::LabelExpression, AcceptanceInfo, AcceptanceSignature, Id, StateConjunction, Token,
+};
 
 pub fn header() -> impl Parser<Token, String, Error = Simple<Token>> + Clone {
     select! {
@@ -10,7 +12,8 @@ pub fn header() -> impl Parser<Token, String, Error = Simple<Token>> + Clone {
 
 pub fn boolean() -> impl Parser<Token, bool, Error = Simple<Token>> + Clone {
     select! {
-        Token::Bool(b) => b,
+        Token::Identifier(id) if id == "t".to_string() => true,
+        Token::Identifier(id) if id == "f".to_string() => false,
     }
 }
 
@@ -41,7 +44,7 @@ pub fn state_conjunction() -> impl Parser<Token, StateConjunction, Error = Simpl
 pub fn acceptance_signature() -> impl Parser<Token, AcceptanceSignature, Error = Simple<Token>> {
     integer()
         .repeated()
-        .delimited_by(just(Token::Ctrl('{')), just(Token::Ctrl('}')))
+        .delimited_by(just(Token::Paren('{')), just(Token::Paren('}')))
 }
 
 impl LabelExpression {
@@ -76,8 +79,8 @@ pub fn label_expression() -> impl Parser<Token, LabelExpression, Error = Simple<
             .or(integer().map(|n| LabelExpression::Integer(n)))
             .or(alias_name().map(|aname| LabelExpression::Alias(aname)));
 
-        let atom =
-            value.or(label_expression.delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')'))));
+        let atom = value
+            .or(label_expression.delimited_by(just(Token::Paren('(')), just(Token::Paren(')'))));
 
         let unary = just(Token::Op('!'))
             .or_not()
@@ -92,23 +95,23 @@ pub fn label_expression() -> impl Parser<Token, LabelExpression, Error = Simple<
 
         let conjunction = unary
             .clone()
-            .separated_by(just(Token::Op('&')))
-            .map(|conjuncts| {
-                if conjuncts.len() > 1 {
-                    LabelExpression::And(conjuncts)
+            .then(just(Token::Op('&')).ignore_then(unary.clone()).repeated())
+            .map(|(lhs, rest)| {
+                if rest.is_empty() {
+                    lhs
                 } else {
-                    conjuncts.first().unwrap().clone()
+                    LabelExpression::And(rest.into_iter().chain(std::iter::once(lhs)).collect())
                 }
             });
 
         let disjunction = conjunction
             .clone()
-            .separated_by(just(Token::Op('|')))
-            .map(|disjuncts| {
-                if disjuncts.len() > 1 {
-                    LabelExpression::Or(disjuncts)
+            .then(just(Token::Op('|')).ignore_then(unary).repeated())
+            .map(|(lhs, rest)| {
+                if rest.is_empty() {
+                    lhs
                 } else {
-                    disjuncts.first().unwrap().clone()
+                    LabelExpression::Or(rest.into_iter().chain(std::iter::once(lhs)).collect())
                 }
             });
 

@@ -2,7 +2,7 @@ use chumsky::prelude::*;
 
 use crate::{lexer::Token, value, AcceptanceSignature, Id, LabelExpression, StateConjunction};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Label(LabelExpression);
 
 #[derive(Clone, Debug)]
@@ -16,10 +16,27 @@ pub struct RawState(
     Option<AcceptanceSignature>,
 );
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Edge(Label, StateConjunction, AcceptanceSignature);
-#[derive(Clone, Debug)]
+
+impl Edge {
+    pub fn new(
+        label_expression: Label,
+        state_conjunction: StateConjunction,
+        acceptance_signature: AcceptanceSignature,
+    ) -> Self {
+        Self(label_expression, state_conjunction, acceptance_signature)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct State(Id, Option<String>, Vec<Edge>);
+
+impl State {
+    pub fn new(id: Id, comment: Option<String>, edges: Vec<Edge>) -> Self {
+        Self(id, comment, edges)
+    }
+}
 
 impl TryFrom<(Option<Label>, Option<AcceptanceSignature>, RawEdge)> for Edge {
     type Error = String;
@@ -66,8 +83,9 @@ impl TryFrom<(RawState, Vec<RawEdge>)> for State {
 }
 
 pub fn label() -> impl Parser<Token, Label, Error = Simple<Token>> {
-    value::label_expression()
-        .delimited_by(just(Token::Ctrl('[')), just(Token::Ctrl(']')))
+    just(Token::Paren('['))
+        .ignore_then(value::label_expression())
+        .then_ignore(just(Token::Paren(']')))
         .map(Label)
 }
 
@@ -81,7 +99,7 @@ pub fn edge() -> impl Parser<Token, RawEdge, Error = Simple<Token>> {
         })
 }
 
-pub fn state() -> impl Parser<Token, State, Error = Simple<Token>> {
+pub fn raw_state() -> impl Parser<Token, (RawState, Vec<RawEdge>), Error = Simple<Token>> {
     just(Token::Header("State".to_string()))
         .ignore_then(
             label()
@@ -92,14 +110,115 @@ pub fn state() -> impl Parser<Token, State, Error = Simple<Token>> {
                 .map(|(((l, i), t), a)| RawState(l, i, t, a)),
         )
         .then(edge().repeated())
-        .try_map(|output, span| {
-            State::try_from(output)
-                .map_err(|err| Simple::custom(span, format!("Problem parsing state {}", err)))
-        })
+}
+
+pub struct Body(Vec<State>);
+
+// TODO REMOVE
+pub struct RawBody(Vec<(RawState, Vec<RawEdge>)>);
+
+impl RawBody {
+    pub fn parser() -> impl Parser<Token, Self, Error = Simple<Token>> {
+        just(Token::BodyStart)
+            .ignore_then(raw_state().repeated())
+            .map(RawBody)
+            .then_ignore(just(Token::BodyEnd))
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use chumsky::{primitive::end, Parser, Stream};
+
+    use crate::{build_error_report, header, lexer, LabelExpression};
+
+    use super::{Edge, Label, State};
+
+    pub fn in_tags(input: &str) -> String {
+        format!("--BODY--\n{}\n--END--", input)
+    }
+
+    #[cfg(test)]
+    pub fn process_body(input: &str) -> Result<Vec<State>, ()> {
+        use crate::{body::RawBody, print_error_report};
+
+        use super::Body;
+
+        let tokens = lexer::tokenizer().parse(input).map_err(|error_list| {
+            print_error_report(
+                input,
+                error_list.into_iter().map(|err| err.map(|c| c.to_string())),
+            )
+        })?;
+
+        for tok in &tokens {
+            print!("{}", tok.0);
+        }
+        let len = input.chars().count();
+        let ast = RawBody::parser()
+            .then_ignore(end())
+            .parse(Stream::from_iter(len..len + 1, tokens.into_iter()))
+            .map_err(|error_list| {
+                print_error_report(
+                    input,
+                    error_list.into_iter().map(|err| err.map(|c| c.to_string())),
+                )
+            })?;
+        let res: Result<Vec<State>, String> = ast
+            .0
+            .into_iter()
+            .map(|(raw_state, raw_edges)| State::try_from((raw_state, raw_edges)))
+            .collect();
+        Ok(res.map_err(|err| panic!("{}", err))?)
+    }
+
     #[test]
-    fn state_test() {}
+    fn named_state() {
+        let hoa = r#"State: 0 "a U b"   /* An example of named state */
+        [0 & !1] 0 {0}
+        [1] 1 {0}"#;
+        let t0 = Edge::new(
+            Label(LabelExpression::And(vec![
+                LabelExpression::Integer(0),
+                LabelExpression::Not(Box::new(LabelExpression::Integer(1))),
+            ])),
+            vec![0],
+            vec![0],
+        );
+        let t1 = Edge::new(Label(LabelExpression::Integer(1)), vec![1], vec![0]);
+        let q0 = State::new(0, Some("a U b".to_string()), vec![t0, t1]);
+        assert_eq!(process_body(&in_tags(hoa)), Ok(vec![q0]));
+    }
+
+    #[test]
+    fn named_state2() {
+        let hoa = r#"State: 1"#;
+        let t0 = Edge::new(
+            Label(LabelExpression::And(vec![
+                LabelExpression::Integer(0),
+                LabelExpression::Not(Box::new(LabelExpression::Integer(1))),
+            ])),
+            vec![0],
+            vec![0],
+        );
+        let t1 = Edge::new(Label(LabelExpression::Integer(1)), vec![1], vec![0]);
+        let q0 = State::new(0, Some("a U b".to_string()), vec![t0, t1]);
+        assert_eq!(process_body(&in_tags(hoa)), Ok(vec![q0]));
+    }
+
+    #[test]
+    fn named_state3() {
+        let hoa = r#"State: 1"#;
+        let t0 = Edge::new(
+            Label(LabelExpression::And(vec![
+                LabelExpression::Integer(0),
+                LabelExpression::Not(Box::new(LabelExpression::Integer(1))),
+            ])),
+            vec![0],
+            vec![0],
+        );
+        let t1 = Edge::new(Label(LabelExpression::Integer(1)), vec![1], vec![0]);
+        let q0 = State::new(0, Some("a U b".to_string()), vec![t0, t1]);
+        assert_eq!(process_body(&in_tags(hoa)), Ok(vec![q0]));
+    }
 }

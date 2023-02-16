@@ -85,32 +85,65 @@ fn item() -> impl Parser<Token, HeaderItem, Error = Simple<Token>> {
         .or(properties)
 }
 
-pub fn parser() -> impl Parser<Token, Vec<HeaderItem>, Error = Simple<Token>> {
-    let required_hoa = just(Token::Header("HOA".to_string()))
-        .ignore_then(just(Token::Identifier("v1".to_string())));
-    required_hoa.ignore_then(item().repeated())
+pub struct Header(Vec<HeaderItem>);
+
+impl Header {
+    pub fn parser() -> impl Parser<Token, Self, Error = Simple<Token>> {
+        let required_hoa = just(Token::Header("HOA".to_string()))
+            .ignore_then(just(Token::Identifier("v1".to_string())));
+        required_hoa.ignore_then(item().repeated()).map(Header)
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use itertools::Itertools;
+    #[cfg(test)]
+    pub fn process_header(input: &str) -> Result<Vec<HeaderItem>, String> {
+        use chumsky::Stream;
 
-    use crate::process;
+        use crate::{build_error_report, header, lexer};
+
+        let (tokens, errs) = lexer::tokenizer().parse_recovery(input);
+        if let Some(tokens) = tokens {
+            let len = input.chars().count();
+            let (ast, parse_errs) = Header::parser()
+                .then_ignore(end())
+                .parse_recovery(Stream::from_iter(len..len + 1, tokens.into_iter()));
+
+            if parse_errs.is_empty() && ast.is_some() {
+                let out = ast.unwrap();
+                Ok(out.0)
+            } else {
+                Err(build_error_report(
+                    input,
+                    errs.into_iter()
+                        .map(|err| err.map(|c| c.to_string()))
+                        .chain(parse_errs.into_iter().map(|err| err.map(|c| c.to_string()))),
+                ))
+            }
+        } else {
+            Err(build_error_report(
+                input,
+                errs.into_iter().map(|err| err.map(|c| c.to_string())),
+            ))
+        }
+    }
+    use itertools::Itertools;
 
     use super::*;
 
     fn assert_header(input: &str, cmp: &[HeaderItem]) {
-        match process(&format!("HOA: v1 {}", input)) {
+        match process_header(&format!("HOA: v1 {}", input)) {
             Ok(res) => assert_eq!(res, cmp),
             Err(err) => {
-                eprintln!("{}", err.into_iter().join("\n"));
+                eprintln!("{}", err);
                 assert!(false)
             }
         }
     }
 
     fn assert_fails(input: &str) {
-        assert!(process(&format!("HOA: v1 {}", input)).is_err())
+        assert!(process_header(&format!("HOA: v1 {}", input)).is_err())
     }
 
     #[test]
