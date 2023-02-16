@@ -220,27 +220,38 @@ mod tests {
             "Alias: @a 0 & 1",
             &[HeaderItem::Alias(
                 "a".to_string(),
-                LabelExpression::And(vec![
-                    LabelExpression::Integer(1),
-                    LabelExpression::Integer(0),
-                ]),
+                LabelExpression::And(
+                    Box::new(LabelExpression::Integer(0)),
+                    Box::new(LabelExpression::Integer(1)),
+                ),
             )],
         );
 
-        // & binds stronger so it should be on the left
-        assert_fails("Alias: @a 1 | 2 & 0");
-        // so this works
+        // & binds stronger
+        assert_header(
+            "Alias: @a 1 | 2 & 0",
+            &[HeaderItem::Alias(
+                "a".to_string(),
+                LabelExpression::Or(
+                    Box::new(LabelExpression::Integer(1)),
+                    Box::new(LabelExpression::And(
+                        Box::new(LabelExpression::Integer(2)),
+                        Box::new(LabelExpression::Integer(0)),
+                    )),
+                ),
+            )],
+        );
         assert_header(
             "Alias: @a 0 & 1 | 2",
             &[HeaderItem::Alias(
                 "a".to_string(),
-                LabelExpression::Or(vec![
-                    LabelExpression::Integer(2),
-                    LabelExpression::And(vec![
-                        LabelExpression::Integer(1),
-                        LabelExpression::Integer(0),
-                    ]),
-                ]),
+                LabelExpression::Or(
+                    Box::new(LabelExpression::And(
+                        Box::new(LabelExpression::Integer(0)),
+                        Box::new(LabelExpression::Integer(1)),
+                    )),
+                    Box::new(LabelExpression::Integer(2)),
+                ),
             )],
         );
 
@@ -248,13 +259,13 @@ mod tests {
             "Alias: @a (0 | 1) & 2",
             &[HeaderItem::Alias(
                 "a".to_string(),
-                LabelExpression::And(vec![
-                    LabelExpression::Integer(2),
-                    LabelExpression::Or(vec![
-                        LabelExpression::Integer(1),
-                        LabelExpression::Integer(0),
-                    ]),
-                ]),
+                LabelExpression::And(
+                    Box::new(LabelExpression::Or(
+                        Box::new(LabelExpression::Integer(0)),
+                        Box::new(LabelExpression::Integer(1)),
+                    )),
+                    Box::new(LabelExpression::Integer(2)),
+                ),
             )],
         );
     }

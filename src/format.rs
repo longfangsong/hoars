@@ -20,8 +20,8 @@ pub enum LabelExpression {
     Integer(u32),
     Alias(AliasName),
     Not(Box<LabelExpression>),
-    And(Vec<LabelExpression>),
-    Or(Vec<LabelExpression>),
+    And(Box<LabelExpression>, Box<LabelExpression>),
+    Or(Box<LabelExpression>, Box<LabelExpression>),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]

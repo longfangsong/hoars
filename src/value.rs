@@ -79,25 +79,23 @@ pub fn label_expression() -> impl Parser<Token, LabelExpression, Error = Simple<
 
         let conjunction = unary
             .clone()
-            .then(just(Token::Op('&')).ignore_then(unary.clone()).repeated())
-            .map(|(lhs, rest)| {
-                if rest.is_empty() {
-                    lhs
-                } else {
-                    LabelExpression::And(rest.into_iter().chain(std::iter::once(lhs)).collect())
-                }
-            });
+            .then(
+                just(Token::Op('&'))
+                    .to(LabelExpression::And)
+                    .then(unary)
+                    .repeated(),
+            )
+            .foldl(|lhs, (f, rhs)| f(Box::new(lhs), Box::new(rhs)));
 
         conjunction
             .clone()
-            .then(just(Token::Op('|')).ignore_then(unary).repeated())
-            .map(|(lhs, rest)| {
-                if rest.is_empty() {
-                    lhs
-                } else {
-                    LabelExpression::Or(rest.into_iter().chain(std::iter::once(lhs)).collect())
-                }
-            })
+            .then(
+                just(Token::Op('|'))
+                    .to(LabelExpression::Or)
+                    .then(conjunction)
+                    .repeated(),
+            )
+            .foldl(|lhs, (f, rhs)| f(Box::new(lhs), Box::new(rhs)))
     })
 }
 

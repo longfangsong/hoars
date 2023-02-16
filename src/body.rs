@@ -172,10 +172,10 @@ mod tests {
         [0 & !1] 0 {0}
         [1] 1 {0}"#;
         let t0 = Edge::from_parts(
-            Label(LabelExpression::And(vec![
-                LabelExpression::Not(Box::new(LabelExpression::Integer(1))),
-                LabelExpression::Integer(0),
-            ])),
+            Label(LabelExpression::And(
+                Box::new(LabelExpression::Integer(0)),
+                Box::new(LabelExpression::Not(Box::new(LabelExpression::Integer(1)))),
+            )),
             vec![0],
             vec![0],
         );
