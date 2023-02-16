@@ -127,24 +127,22 @@ pub fn acceptance_condition() -> impl Parser<Token, AcceptanceCondition, Error =
 
         let conjunction = atom
             .clone()
-            .then(just(Token::Op('&')).ignore_then(atom.clone()).repeated())
-            .map(|(lhs, rest)| {
-                if rest.is_empty() {
-                    lhs
-                } else {
-                    AcceptanceCondition::And(rest.into_iter().chain(std::iter::once(lhs)).collect())
-                }
-            });
+            .then(
+                just(Token::Op('&'))
+                    .to(AcceptanceCondition::And)
+                    .then(atom)
+                    .repeated(),
+            )
+            .foldl(|lhs, (f, rhs)| f(Box::new(lhs), Box::new(rhs)));
 
         conjunction
             .clone()
-            .then(just(Token::Op('|')).ignore_then(atom).repeated())
-            .map(|(lhs, rest)| {
-                if rest.is_empty() {
-                    lhs
-                } else {
-                    AcceptanceCondition::Or(rest.into_iter().chain(std::iter::once(lhs)).collect())
-                }
-            })
+            .then(
+                just(Token::Op('|'))
+                    .to(AcceptanceCondition::Or)
+                    .then(conjunction)
+                    .repeated(),
+            )
+            .foldl(|lhs, (f, rhs)| f(Box::new(lhs), Box::new(rhs)))
     })
 }

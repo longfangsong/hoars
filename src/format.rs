@@ -28,8 +28,8 @@ pub enum LabelExpression {
 pub enum AcceptanceCondition {
     Fin(AcceptanceAtom),
     Inf(AcceptanceAtom),
-    And(Vec<AcceptanceCondition>),
-    Or(Vec<AcceptanceCondition>),
+    And(Box<AcceptanceCondition>, Box<AcceptanceCondition>),
+    Or(Box<AcceptanceCondition>, Box<AcceptanceCondition>),
     Boolean(bool),
 }
 
