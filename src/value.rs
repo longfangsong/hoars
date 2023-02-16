@@ -1,19 +1,21 @@
 use chumsky::{prelude::*, select};
 
 use crate::{
-    format::LabelExpression, AcceptanceInfo, AcceptanceSignature, Id, StateConjunction, Token,
+    format::LabelExpression, AcceptanceAtom, AcceptanceCondition, AcceptanceInfo,
+    AcceptanceSignature, Id, StateConjunction, Token,
 };
 
+#[allow(unused)]
 pub fn header() -> impl Parser<Token, String, Error = Simple<Token>> + Clone {
     select! {
-        Token::Header(hdr) => hdr.clone(),
+        Token::Header(hdr) => hdr,
     }
 }
 
 pub fn boolean() -> impl Parser<Token, bool, Error = Simple<Token>> + Clone {
     select! {
-        Token::Identifier(id) if id == "t".to_string() => true,
-        Token::Identifier(id) if id == "f".to_string() => false,
+        Token::Identifier(id) if id == *"t" => true,
+        Token::Identifier(id) if id == *"f" => false,
     }
 }
 
@@ -25,44 +27,26 @@ pub fn integer() -> impl Parser<Token, Id, Error = Simple<Token>> + Clone {
 
 pub fn text() -> impl Parser<Token, String, Error = Simple<Token>> + Clone {
     select! {
-        Token::Text(txt) => txt.clone(),
+        Token::Text(txt) => txt,
     }
 }
 
 pub fn identifier() -> impl Parser<Token, String, Error = Simple<Token>> + Clone {
-    select! { Token::Identifier(ident) => ident.clone() }
+    select! { Token::Identifier(ident) => ident }
 }
 
 pub fn alias_name() -> impl Parser<Token, String, Error = Simple<Token>> + Clone {
-    select! { Token::Alias(aname) => aname.clone() }
+    select! { Token::Alias(aname) => aname }
 }
 
 pub fn state_conjunction() -> impl Parser<Token, StateConjunction, Error = Simple<Token>> {
-    integer().separated_by(just(Token::Op('&')))
+    integer().separated_by(just(Token::Op('&'))).at_least(1)
 }
 
 pub fn acceptance_signature() -> impl Parser<Token, AcceptanceSignature, Error = Simple<Token>> {
     integer()
         .repeated()
         .delimited_by(just(Token::Paren('{')), just(Token::Paren('}')))
-}
-
-impl LabelExpression {
-    pub fn boolean(b: bool) -> Self {
-        Self::Boolean(b)
-    }
-
-    pub fn alias<I: std::fmt::Display>(name: I) -> Self {
-        Self::Alias(name.to_string())
-    }
-
-    pub fn not(expr: Self) -> Self {
-        Self::Not(Box::new(expr))
-    }
-
-    pub fn int(i: u32) -> Self {
-        Self::Integer(i)
-    }
 }
 
 pub fn acceptance_info() -> impl Parser<Token, AcceptanceInfo, Error = Simple<Token>> {
@@ -75,9 +59,9 @@ pub fn acceptance_info() -> impl Parser<Token, AcceptanceInfo, Error = Simple<To
 pub fn label_expression() -> impl Parser<Token, LabelExpression, Error = Simple<Token>> {
     recursive(|label_expression| {
         let value = boolean()
-            .map(|b| LabelExpression::Boolean(b))
-            .or(integer().map(|n| LabelExpression::Integer(n)))
-            .or(alias_name().map(|aname| LabelExpression::Alias(aname)));
+            .map(LabelExpression::Boolean)
+            .or(integer().map(LabelExpression::Integer))
+            .or(alias_name().map(LabelExpression::Alias));
 
         let atom = value
             .or(label_expression.delimited_by(just(Token::Paren('(')), just(Token::Paren(')'))));
@@ -104,7 +88,7 @@ pub fn label_expression() -> impl Parser<Token, LabelExpression, Error = Simple<
                 }
             });
 
-        let disjunction = conjunction
+        conjunction
             .clone()
             .then(just(Token::Op('|')).ignore_then(unary).repeated())
             .map(|(lhs, rest)| {
@@ -113,8 +97,56 @@ pub fn label_expression() -> impl Parser<Token, LabelExpression, Error = Simple<
                 } else {
                     LabelExpression::Or(rest.into_iter().chain(std::iter::once(lhs)).collect())
                 }
+            })
+    })
+}
+
+pub fn acceptance_condition() -> impl Parser<Token, AcceptanceCondition, Error = Simple<Token>> {
+    recursive(|acceptance_condition| {
+        let atom_value = just(Token::Op('!'))
+            .or_not()
+            .then(integer())
+            .map(|(negated, integer)| {
+                if negated.is_none() {
+                    AcceptanceAtom::Positive(integer)
+                } else {
+                    AcceptanceAtom::Negative(integer)
+                }
             });
 
-        disjunction
+        let fin_inf_atom = just(Token::Fin)
+            .to(AcceptanceCondition::Fin as fn(_) -> _)
+            .or(just(Token::Inf).to(AcceptanceCondition::Inf as fn(_) -> _))
+            .then(atom_value.delimited_by(just(Token::Paren('(')), just(Token::Paren(')'))))
+            .map(|(f, atom)| f(atom));
+
+        let atom =
+            boolean()
+                .map(AcceptanceCondition::Boolean)
+                .or(fin_inf_atom)
+                .or(acceptance_condition
+                    .delimited_by(just(Token::Paren('(')), just(Token::Paren(')'))));
+
+        let conjunction = atom
+            .clone()
+            .then(just(Token::Op('&')).ignore_then(atom.clone()).repeated())
+            .map(|(lhs, rest)| {
+                if rest.is_empty() {
+                    lhs
+                } else {
+                    AcceptanceCondition::And(rest.into_iter().chain(std::iter::once(lhs)).collect())
+                }
+            });
+
+        conjunction
+            .clone()
+            .then(just(Token::Op('|')).ignore_then(atom).repeated())
+            .map(|(lhs, rest)| {
+                if rest.is_empty() {
+                    lhs
+                } else {
+                    AcceptanceCondition::Or(rest.into_iter().chain(std::iter::once(lhs)).collect())
+                }
+            })
     })
 }

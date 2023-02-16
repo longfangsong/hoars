@@ -5,7 +5,7 @@ use crate::{
     value, AcceptanceCondition, AcceptanceInfo, AcceptanceName, AliasName, Id, Property, Token,
 };
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum HeaderItem {
     States(Id),
     Start(StateConjunction),
@@ -50,6 +50,11 @@ fn item() -> impl Parser<Token, HeaderItem, Error = Simple<Token>> {
             }
         });
 
+    let acceptance = just(Token::Header("Acceptance".to_string()))
+        .ignore_then(value::integer())
+        .then(value::acceptance_condition())
+        .map(|(count, condition)| HeaderItem::Acceptance(count, condition));
+
     let alias = just(Token::Header("Alias".to_string()))
         .ignore_then(value::alias_name())
         .then(value::label_expression())
@@ -57,7 +62,7 @@ fn item() -> impl Parser<Token, HeaderItem, Error = Simple<Token>> {
 
     let name = just(Token::Header("name".to_string()))
         .ignore_then(value::text())
-        .map(|s| HeaderItem::Name(s.clone()));
+        .map(HeaderItem::Name);
 
     let tool = just(Token::Header("tool".to_string()))
         .ignore_then(value::text())
@@ -67,41 +72,46 @@ fn item() -> impl Parser<Token, HeaderItem, Error = Simple<Token>> {
     let properties = just(Token::Header("properties".to_string()))
         .ignore_then(
             value::identifier()
-                .try_map(|p, span| {
-                    Property::try_from(p).map_err(|err| Simple::custom(span, err.clone()))
-                })
+                .try_map(|p, span| Property::try_from(p).map_err(|err| Simple::custom(span, err)))
                 .repeated()
                 .at_least(1),
         )
         .map(HeaderItem::Properties);
 
-    states
-        .or(acceptance_name)
-        .or(start)
-        .or(aps)
-        .or(alias)
-        .or(name)
-        .or(tool)
-        .or(properties)
+    chumsky::primitive::choice((
+        states,
+        acceptance,
+        acceptance_name,
+        start,
+        aps,
+        alias,
+        name,
+        tool,
+        properties,
+    ))
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Header(Vec<HeaderItem>);
 
 impl Header {
     pub fn parser() -> impl Parser<Token, Self, Error = Simple<Token>> {
-        let required_hoa = just(Token::Header("HOA".to_string()))
-            .ignore_then(just(Token::Identifier("v1".to_string())));
-        required_hoa.ignore_then(item().repeated()).map(Header)
+        item().repeated().map(Header)
+    }
+
+    pub fn from_vec(value: Vec<HeaderItem>) -> Self {
+        Self(value)
     }
 }
 
 #[cfg(test)]
 mod tests {
     #[cfg(test)]
+    #[allow(clippy::unnecessary_unwrap)]
     pub fn process_header(input: &str) -> Result<Vec<HeaderItem>, String> {
         use chumsky::Stream;
 
-        use crate::{build_error_report, header, lexer};
+        use crate::{build_error_report, lexer};
 
         let (tokens, errs) = lexer::tokenizer().parse_recovery(input);
         if let Some(tokens) = tokens {
@@ -128,22 +138,21 @@ mod tests {
             ))
         }
     }
-    use itertools::Itertools;
 
     use super::*;
 
     fn assert_header(input: &str, cmp: &[HeaderItem]) {
-        match process_header(&format!("HOA: v1 {}", input)) {
+        match process_header(input) {
             Ok(res) => assert_eq!(res, cmp),
             Err(err) => {
                 eprintln!("{}", err);
-                assert!(false)
+                unreachable!()
             }
         }
     }
 
     fn assert_fails(input: &str) {
-        assert!(process_header(&format!("HOA: v1 {}", input)).is_err())
+        assert!(process_header(input).is_err())
     }
 
     #[test]
@@ -212,50 +221,42 @@ mod tests {
             &[HeaderItem::Alias(
                 "a".to_string(),
                 LabelExpression::And(vec![
-                    LabelExpression::Integer(0),
                     LabelExpression::Integer(1),
+                    LabelExpression::Integer(0),
                 ]),
             )],
         );
+
+        // & binds stronger so it should be on the left
+        assert_fails("Alias: @a 1 | 2 & 0");
+        // so this works
         assert_header(
             "Alias: @a 0 & 1 | 2",
             &[HeaderItem::Alias(
                 "a".to_string(),
                 LabelExpression::Or(vec![
-                    LabelExpression::And(vec![
-                        LabelExpression::Integer(0),
-                        LabelExpression::Integer(1),
-                    ]),
                     LabelExpression::Integer(2),
-                ]),
-            )],
-        );
-        assert_header(
-            "Alias: @a 0 | 1 & 2",
-            &[HeaderItem::Alias(
-                "a".to_string(),
-                LabelExpression::Or(vec![
-                    LabelExpression::Integer(0),
                     LabelExpression::And(vec![
                         LabelExpression::Integer(1),
-                        LabelExpression::Integer(2),
+                        LabelExpression::Integer(0),
                     ]),
                 ]),
             )],
         );
+
         assert_header(
             "Alias: @a (0 | 1) & 2",
             &[HeaderItem::Alias(
                 "a".to_string(),
                 LabelExpression::And(vec![
-                    LabelExpression::Or(vec![
-                        LabelExpression::Integer(0),
-                        LabelExpression::Integer(1),
-                    ]),
                     LabelExpression::Integer(2),
+                    LabelExpression::Or(vec![
+                        LabelExpression::Integer(1),
+                        LabelExpression::Integer(0),
+                    ]),
                 ]),
             )],
-        )
+        );
     }
 
     #[test]

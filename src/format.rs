@@ -1,10 +1,16 @@
+use crate::Id;
+
 pub type StateConjunction = Vec<crate::Id>;
 
 pub type AtomicProposition = String;
 
 pub type AliasName = String;
 
-pub type AcceptanceAtom = (bool, crate::Id);
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum AcceptanceAtom {
+    Positive(Id),
+    Negative(Id),
+}
 
 pub type AcceptanceSignature = Vec<crate::Id>;
 
@@ -18,7 +24,7 @@ pub enum LabelExpression {
     Or(Vec<LabelExpression>),
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum AcceptanceCondition {
     Fin(AcceptanceAtom),
     Inf(AcceptanceAtom),
@@ -61,7 +67,7 @@ impl TryFrom<String> for AcceptanceName {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Property {
     StateLabels,
     TransLabels,
@@ -111,7 +117,7 @@ impl TryFrom<String> for Property {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum AcceptanceInfo {
     Int(crate::Id),
     Identifier(String),
