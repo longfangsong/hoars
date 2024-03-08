@@ -1,8 +1,9 @@
+use biodivine_lib_bdd::Bdd;
 use chumsky::{prelude::*, select};
 
 use crate::{
-    format::LabelExpression, AcceptanceAtom, AcceptanceCondition, AcceptanceInfo,
-    AcceptanceSignature, Id, StateConjunction, Token,
+    AcceptanceAtom, AcceptanceCondition, AcceptanceInfo, AcceptanceSignature, HoaBool, Id,
+    StateConjunction, Token, MAX_APS,
 };
 
 #[allow(unused)]
@@ -40,13 +41,17 @@ pub fn alias_name() -> impl Parser<Token, String, Error = Simple<Token>> + Clone
 }
 
 pub fn state_conjunction() -> impl Parser<Token, StateConjunction, Error = Simple<Token>> {
-    integer().separated_by(just(Token::Op('&'))).at_least(1)
+    integer()
+        .separated_by(just(Token::Op('&')))
+        .at_least(1)
+        .map(StateConjunction)
 }
 
 pub fn acceptance_signature() -> impl Parser<Token, AcceptanceSignature, Error = Simple<Token>> {
     integer()
         .repeated()
         .delimited_by(just(Token::Paren('{')), just(Token::Paren('}')))
+        .map(AcceptanceSignature)
 }
 
 pub fn acceptance_info() -> impl Parser<Token, AcceptanceInfo, Error = Simple<Token>> {
@@ -56,12 +61,26 @@ pub fn acceptance_info() -> impl Parser<Token, AcceptanceInfo, Error = Simple<To
     }
 }
 
-pub fn label_expression() -> impl Parser<Token, LabelExpression, Error = Simple<Token>> {
+pub fn label_expression() -> impl Parser<Token, Bdd, Error = Simple<Token>> {
     recursive(|label_expression| {
         let value = boolean()
-            .map(LabelExpression::Boolean)
-            .or(integer().map(LabelExpression::Integer))
-            .or(alias_name().map(LabelExpression::Alias));
+            .map(|b| {
+                if b {
+                    crate::ALPHABET.mk_true()
+                } else {
+                    crate::ALPHABET.mk_false()
+                }
+            })
+            .or(integer().map(|i| {
+                assert!(
+                    (i as usize) < MAX_APS,
+                    "invalid AP, {} is above limit {}",
+                    i,
+                    MAX_APS
+                );
+                crate::ALPHABET.mk_var(crate::VARS[i as usize])
+            }));
+        // .or(alias_name().map(|aname| LabelExpression::Alias(AliasName(aname))));
 
         let atom = value
             .or(label_expression.delimited_by(just(Token::Paren('(')), just(Token::Paren(')'))));
@@ -69,33 +88,39 @@ pub fn label_expression() -> impl Parser<Token, LabelExpression, Error = Simple<
         let unary = just(Token::Op('!'))
             .or_not()
             .then(atom)
-            .map(|(negated, expr)| {
-                if negated.is_some() {
-                    LabelExpression::Not(Box::new(expr))
-                } else {
-                    expr
-                }
-            });
+            .map(
+                |(negated, expr)| {
+                    if negated.is_some() {
+                        expr.not()
+                    } else {
+                        expr
+                    }
+                },
+            );
+
+        let f_conjunction = |l: Bdd, r: &Bdd| l.and(r);
 
         let conjunction = unary
             .clone()
             .then(
                 just(Token::Op('&'))
-                    .to(LabelExpression::And)
+                    .to(f_conjunction)
                     .then(unary)
                     .repeated(),
             )
-            .foldl(|lhs, (f, rhs)| f(Box::new(lhs), Box::new(rhs)));
+            .foldl(|lhs, (f, rhs)| f(lhs, &rhs));
+
+        let f_disjunction = |l: Bdd, r: &Bdd| l.or(r);
 
         conjunction
             .clone()
             .then(
                 just(Token::Op('|'))
-                    .to(LabelExpression::Or)
+                    .to(f_disjunction)
                     .then(conjunction)
                     .repeated(),
             )
-            .foldl(|lhs, (f, rhs)| f(Box::new(lhs), Box::new(rhs)))
+            .foldl(|lhs, (f, rhs)| f(lhs, &rhs))
     })
 }
 
@@ -120,6 +145,7 @@ pub fn acceptance_condition() -> impl Parser<Token, AcceptanceCondition, Error =
 
         let atom =
             boolean()
+                .map(HoaBool)
                 .map(AcceptanceCondition::Boolean)
                 .or(fin_inf_atom)
                 .or(acceptance_condition
