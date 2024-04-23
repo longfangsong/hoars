@@ -1,16 +1,18 @@
 use std::ops::{Deref, DerefMut};
 
-use biodivine_lib_bdd::Bdd;
 use chumsky::prelude::*;
 
-use crate::{lexer::Token, value, AcceptanceSignature, AtomicProposition, Id, StateConjunction};
+use crate::{
+    lexer::Token, value, AbstractLabelExpression, AcceptanceSignature, AtomicProposition, Id,
+    StateConjunction,
+};
 
 /// Newtype wrapper around a [`crate::LabelExpression`], implements [`Deref`].
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Label(pub Bdd);
+pub struct Label(pub AbstractLabelExpression);
 
 impl Deref for Label {
-    type Target = Bdd;
+    type Target = AbstractLabelExpression;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -165,6 +167,8 @@ fn explicit_edge() -> impl Parser<Token, ExplicitEdge, Error = Simple<Token>> {
         })
 }
 
+// For now, we allow only explicit edges, but this might change in the future. In any case, we already have the necessary
+// infrastructure to support implicit edges.
 #[allow(unused)]
 fn implicit_edge() -> impl Parser<Token, ImplicitEdge, Error = Simple<Token>> {
     value::state_conjunction()
