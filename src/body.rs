@@ -93,8 +93,8 @@ pub struct State(
 
 impl State {
     /// Constructs a new state from its parts.
-    pub fn from_parts(id: Id, comment: Option<String>, edges: Vec<Edge>) -> Self {
-        Self(id, comment, edges)
+    pub fn from_parts(id: Id, accept: Option<String>, edges: Vec<Edge>) -> Self {
+        Self(id, accept, edges)
     }
 
     /// Extracts the id of the state.

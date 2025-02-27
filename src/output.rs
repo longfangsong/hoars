@@ -171,7 +171,7 @@ impl Display for Edge {
 impl Display for State {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(acc) = &self.1 {
-            writeln!(f, "State: {} \"{}\"", self.0, acc)?;
+            writeln!(f, "State: {} {{{}}}", self.0, acc)?;
         } else {
             writeln!(f, "State: {}", self.0)?;
         }
