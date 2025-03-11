@@ -185,16 +185,38 @@ impl Header {
         })
     }
 
-    pub fn count_states(&self) -> Option<usize> {
-        self.iter().find_map(|i| i.count_states())
+    pub fn name(&self) -> Option<String> {
+        self.iter().find_map(|item| match item {
+            HeaderItem::Name(name) => Some(name.clone()),
+            _ => None,
+        })
     }
 
-    pub fn acceptance_name(&self) -> AcceptanceName {
-        self.iter()
-            .find_map(|i| i.try_acceptance_name())
-            .expect("Acceptance header must be present")
-            .0
-            .clone()
+    pub fn start(&self) -> Option<StateConjunction> {
+        self.iter().find_map(|item| match item {
+            HeaderItem::Start(conjunction) => Some(conjunction.clone()),
+            _ => None,
+        })
+    }
+
+    pub fn acceptance_condition(&self) -> Option<AcceptanceCondition> {
+        self.iter().find_map(|item| match item {
+            HeaderItem::Acceptance(_, condition) => Some(condition.clone()),
+            _ => None,
+        })
+    }
+
+    pub fn acceptance_name(&self) -> Option<AcceptanceName> {
+        self.iter().find_map(|item| match item {
+            HeaderItem::AcceptanceName(name, _) => Some(name.clone()),
+            _ => None,
+        })
+    }
+    
+
+
+    pub fn count_states(&self) -> Option<usize> {
+        self.iter().find_map(|i| i.count_states())
     }
 }
 

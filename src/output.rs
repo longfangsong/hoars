@@ -17,6 +17,78 @@ pub fn to_hoa(aut: &HoaAutomaton) -> String {
         .join("\n")
 }
 
+pub fn to_dot(aut: &HoaAutomaton) -> String {
+    let mut dot = String::new();
+    dot.push_str(&format!(
+        "digraph {} {{\n",
+        aut.header().name().unwrap_or("".to_string())
+    ));
+    if let Some(acceptance_name) = aut.header().acceptance_name() {
+        if acceptance_name == AcceptanceName::Buchi || acceptance_name == AcceptanceName::CoBuchi {
+            dot.push_str(&format!("    label=\"[{}]\";\n", acceptance_name));
+        } else {
+            dot.push_str(&format!(
+                "    label=\"{}\\n[{}]\";\n",
+                aut.header()
+                    .acceptance_condition()
+                    .map(|it| it.to_string())
+                    .unwrap_or("".to_string()),
+                aut.header()
+                    .acceptance_name()
+                    .map(|it| it.to_string())
+                    .unwrap_or("".to_string())
+            ));
+        }
+    }
+    dot.push_str("    rankdir=LR;\n");
+    dot.push_str("    labelloc=\"t\";\n");
+    dot.push_str("    node [shape=circle];\n");
+    dot.push_str("    I [label=\"\", style=invis, width=0];\n");
+    if let Some(start) = aut.header().start() {
+        for state in start.0 {
+            dot.push_str(&format!("    I -> {}\n", state));
+        }
+    }
+    let aps = aut.aps();
+    for state in aut.body() {
+        dot.push_str(&format!("    {}", state.id));
+        if let Some(label) = &state.label {
+            if state.accept_signature.is_empty() {
+                dot.push_str(&format!(" [label=\"{}\"]", label));
+            } else if aut
+                .header()
+                .acceptance_name()
+                .map(|it| it == AcceptanceName::Buchi || it == AcceptanceName::CoBuchi)
+                .unwrap_or(false)
+            {
+                dot.push_str(&format!(" [label=\"{}\", shape=doublecircle]", label));
+            } else {
+                dot.push_str(&format!(
+                    " [label=\"{}\\n{}\"]",
+                    label, state.accept_signature
+                ));
+            }
+        }
+        dot.push_str("\n");
+        for edge in &state.edges {
+            if edge.2.is_empty() {
+                dot.push_str(&format!(
+                    "    {} -> {} [label=\"{}\"]\n",
+                    state.id, edge.1, edge.0.0.format_with_vars(&aps)
+                ));
+            } else {
+                dot.push_str(&format!(
+                    "    {} -> {} [label=\"{}\\n{}\"]\n",
+                    state.id, edge.1, edge.0.0.format_with_vars(&aps), edge.2
+                ));
+            }
+        }
+        dot.push_str("\n");
+    }
+    dot.push_str("}\n");
+    dot
+}
+
 impl Display for HeaderItem {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

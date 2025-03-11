@@ -444,6 +444,18 @@ impl std::fmt::Display for AbstractLabelExpression {
     }
 }
 
+impl AbstractLabelExpression {
+    pub fn format_with_vars(&self, vars: &[String]) -> String {
+        match self {
+            AbstractLabelExpression::Boolean(b) => b.to_string(),
+            AbstractLabelExpression::Integer(i) => vars[*i as usize].clone(),
+            AbstractLabelExpression::Negated(e) => format!("!{}", e.format_with_vars(vars)),
+            AbstractLabelExpression::Conjunction(cs) => cs.iter().map(|c| c.format_with_vars(vars)).join(" & "),
+            AbstractLabelExpression::Disjunction(ds) => ds.iter().map(|c| c.format_with_vars(vars)).join(" | "),
+        }
+    }
+}
+
 fn build_error_report<I: Iterator<Item = Simple<String>>>(input: &str, errs: I) -> String {
     errs.into_iter()
         .map(|e| {
