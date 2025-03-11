@@ -85,36 +85,42 @@ impl Edge {
 /// Represents a state in a HOA automaton. It contains the [`Id`] of the state, an optional
 /// comment and a list of outgoing edges.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct State(
-    pub(crate) Id,
-    pub(crate) Option<String>,
-    pub(crate) Vec<Edge>,
-);
+pub struct State {
+    pub(crate) id: Id,
+    pub(crate) label: Option<String>,
+    pub(crate) accept_signature: AcceptanceSignature,
+    pub(crate) edges: Vec<Edge>,
+}
 
 impl State {
     /// Constructs a new state from its parts.
-    pub fn from_parts(id: Id, accept: Option<String>, edges: Vec<Edge>) -> Self {
-        Self(id, accept, edges)
+    pub fn from_parts(id: Id, label: Option<String>, accept_signature: AcceptanceSignature, edges: Vec<Edge>) -> Self {
+        Self {
+            id,
+            accept_signature,
+            label,
+            edges,
+        }
     }
 
     /// Extracts the id of the state.
     pub fn id(&self) -> Id {
-        self.0
+        self.id
     }
 
     /// Extracts the comment of the state, if present.
-    pub fn comment(&self) -> Option<&str> {
-        self.1.as_deref()
+    pub fn label(&self) -> Option<&str> {
+        self.label.as_deref()
     }
 
     /// Extracts the edges of the state.
     pub fn edges(&self) -> &[Edge] {
-        &self.2
+        &self.edges
     }
 
     /// Gives mutable access to the edges of this state.
     pub fn edges_mut(&mut self) -> &mut [Edge] {
-        &mut self.2
+        &mut self.edges
     }
 }
 
@@ -147,7 +153,7 @@ impl TryFrom<(RawState, Vec<ExplicitEdge>)> for State {
             out_edges.push(Edge::from((state_acc.clone(), raw_edge)));
         }
 
-        Ok(State(id, state_text, out_edges))
+        Ok(State::from_parts(id, state_text, AcceptanceSignature(Vec::new()), out_edges))
     }
 }
 
@@ -242,7 +248,7 @@ impl DerefMut for Body {
 mod tests {
     use chumsky::{primitive::end, Parser, Stream};
 
-    use crate::{lexer, Edge, Label, StateConjunction, ALPHABET, VARS};
+    use crate::{lexer, AcceptanceSignature, Edge, Label, StateConjunction, ALPHABET, VARS};
 
     use super::State;
 
@@ -292,7 +298,7 @@ mod tests {
             StateConjunction(vec![1]),
             crate::AcceptanceSignature(vec![0]),
         );
-        let q0 = State::from_parts(0, Some("a U b".to_string()), vec![t0, t1]);
+        let q0 = State::from_parts(0, Some("a U b".to_string()),AcceptanceSignature(Vec::new()),vec![t0, t1]);
         assert_eq!(process_body(&in_tags(hoa)), Ok(vec![q0]));
     }
 
@@ -307,14 +313,14 @@ mod tests {
             StateConjunction(vec![1]),
             crate::AcceptanceSignature(vec![1]),
         );
-        let q0 = State::from_parts(1, None, vec![t0]);
+        let q0 = State::from_parts(1, None, AcceptanceSignature(Vec::new()),vec![t0]);
         assert_eq!(process_body(&in_tags(hoa)), Ok(vec![q0]));
     }
 
     #[test]
     fn no_transition_state() {
         let hoa = r#"State: 1"#;
-        let q0 = State::from_parts(1, None, vec![]);
+        let q0 = State::from_parts(1, None, AcceptanceSignature(Vec::new()), vec![]);
         assert_eq!(process_body(&in_tags(hoa)), Ok(vec![q0]));
     }
 }

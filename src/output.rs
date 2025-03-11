@@ -170,12 +170,13 @@ impl Display for Edge {
 
 impl Display for State {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Some(acc) = &self.1 {
-            writeln!(f, "State: {} {{{}}}", self.0, acc)?;
-        } else {
-            writeln!(f, "State: {}", self.0)?;
+        write!(f, "State: {}", self.id)?;
+        if let Some(label) = &self.label {
+            write!(f, " \"{}\"", label)?;
         }
-        for edge in &self.2 {
+        writeln!(f, " {}", self.accept_signature)?;
+
+        for edge in &self.edges {
             writeln!(f, "{}", edge)?;
         }
         Ok(())

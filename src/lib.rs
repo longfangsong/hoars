@@ -253,7 +253,7 @@ impl HoaAutomaton {
     /// body. This function will also unalias the automaton.
     pub fn from_parts(header: Header, body: Body) -> Self {
         let mut out = Self { header, body };
-        out.body.sort_by(|x, y| x.0.cmp(&y.0));
+        out.body.sort_by(|x, y| x.id().cmp(&y.id()));
         out
     }
 
@@ -583,6 +583,7 @@ mod tests {
         let q0 = State::from_parts(
             0,
             None,
+            AcceptanceSignature(Vec::new()),
             vec![
                 Edge::from_parts(
                     Label(ALPHABET.mk_var(VARS[0])),
@@ -599,6 +600,7 @@ mod tests {
         let q1 = State::from_parts(
             1,
             None,
+            AcceptanceSignature(Vec::new()),
             vec![
                 Edge::from_parts(
                     Label(ALPHABET.mk_var(VARS[0])),
@@ -615,6 +617,7 @@ mod tests {
         let q2 = State::from_parts(
             2,
             None,
+            AcceptanceSignature(Vec::new()),
             vec![
                 Edge::from_parts(
                     Label(ALPHABET.mk_var(VARS[0])),

@@ -47,7 +47,7 @@ pub enum AcceptanceAtom {
 }
 
 /// An acceptance signature is a vector of acceptance set
-/// identifiers, it is associated with an edge.
+/// identifiers, it is associated with an edge or a state.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct AcceptanceSignature(pub Vec<crate::Id>);
 
